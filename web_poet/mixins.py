@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 from urllib.parse import urljoin
 
 import parsel
 from w3lib.html import get_base_url
 
+from web_poet._selectors import _get_selectors_dict
+from web_poet.utils import cached_method
+
 if TYPE_CHECKING:
+    from web_poet._selectors import _SelectorDeclaration
     from web_poet.page_inputs.url import RequestUrl, ResponseUrl
 
 
@@ -37,6 +41,28 @@ class SelectorShortcutsMixin:
                 "Please install parsel >= 1.8.1 to get jmespath support"
             )
         return self.selector.jmespath(query, **kwargs)  # type: ignore[attr-defined]
+
+    @cached_method
+    def _selector_values(self) -> dict[str, Any]:
+        """Return the values of all selector declarations of this object,
+        extracting them on the first call."""
+        return self._extract_selectors(_get_selectors_dict(self))
+
+    def _extract_selectors(
+        self, declarations: dict[str, _SelectorDeclaration]
+    ) -> dict[str, Any]:
+        """Return a value for every declaration in *declarations*.
+
+        Override this to use an alternative extraction backend, e.g. one that
+        extracts all declarations in a single pass."""
+        values = {}
+        for name, declaration in declarations.items():
+            query = getattr(self, declaration.syntax)
+            selector_list = query(declaration.expression)
+            values[name] = (
+                selector_list.getall() if declaration.all else selector_list.get()
+            )
+        return values
 
 
 class SelectableMixin(abc.ABC, SelectorShortcutsMixin):

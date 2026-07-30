@@ -1,4 +1,5 @@
 from ._layouts import layout_switch
+from ._selectors import selector
 from .annotated import AnnotatedInstance, annotation_decode, annotation_encode
 from .fields import field, item_from_fields, item_from_fields_sync
 from .page_inputs import (
@@ -71,6 +72,7 @@ __all__ = [
     "item_from_fields_sync",
     "layout_switch",
     "request_downloader_var",
+    "selector",
     "validates_input",
 ]
 

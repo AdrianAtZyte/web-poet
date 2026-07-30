@@ -14,6 +14,7 @@ from typing import Any, Generic, TypeVar, cast, overload
 import attrs
 from itemadapter import ItemAdapter
 
+from web_poet._selectors import _selector_values, _SelectorDeclaration
 from web_poet.utils import cached_method, callable_has_parameter, ensure_awaitable
 
 _FIELDS_INFO_ATTRIBUTE_READ = "_web_poet_fields_info"
@@ -71,6 +72,7 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         cached: bool,
         meta: dict | None,
         out: list[Callable] | None,
+        selector_declaration: _SelectorDeclaration | None = None,
     ):
         if not callable(method):
             raise TypeError(
@@ -81,10 +83,17 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         self.meta = meta
         self.out = out
         self.name: str | None = None
+        self.selector_declaration = selector_declaration
         update_wrapper(cast("Callable", self), method)
 
     def __set_name__(self, owner, name: str) -> None:
         self.name = name
+        if self.selector_declaration is not None:
+            self.selector_declaration.__set_name__(owner, name)
+            # Input validation looks the field up on the validation item by the
+            # name of the method, and the method here is a generated closure.
+            self.original_method.__name__ = name
+            self.__name__ = name
         if not hasattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE):
             setattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE, {})
 
@@ -175,6 +184,26 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
 
 @overload
 def field(
+    method: str,
+    *,
+    cached: bool = False,
+    meta: dict | None = None,
+    out: list[Callable] | None = None,
+) -> _FieldDescriptor[Any, str | None]: ...
+
+
+@overload
+def field(
+    method: _SelectorDeclaration[_ReturnT],
+    *,
+    cached: bool = False,
+    meta: dict | None = None,
+    out: list[Callable] | None = None,
+) -> _FieldDescriptor[Any, _ReturnT]: ...
+
+
+@overload
+def field(
     method: _FieldMethod[_PageT, _ReturnT],
     *,
     cached: bool = False,
@@ -194,7 +223,7 @@ def field(
 
 
 def field(
-    method: _FieldMethod[Any, Any] | None = None,
+    method: _FieldMethod[Any, Any] | _SelectorDeclaration | str | None = None,
     *,
     cached: bool = False,
     meta: dict | None = None,
@@ -204,6 +233,9 @@ def field(
     Page Object method decorated with ``@field`` decorator becomes a property,
     which is then used by :class:`~.ItemPage`'s to_item() method to populate a
     corresponding item attribute.
+
+    Instead of a method, you can pass a CSS or XPath expression, or a
+    :func:`~web_poet.selector` declaration. See :ref:`declarative-selectors`.
 
     By default, the value is computed on each property access. Use
     ``@field(cached=True)`` to cache the property value.
@@ -215,6 +247,24 @@ def field(
     The ``out`` parameter is an optional list of field processors, which are
     functions applied to the value of the field before returning it.
     """
+
+    if isinstance(method, str):
+        method = _SelectorDeclaration(method)
+
+    if isinstance(method, _SelectorDeclaration):
+        # field(selector(...)) syntax
+        declaration = method
+
+        def selector_method(page):
+            return _selector_values(page)[declaration.name]
+
+        return _FieldDescriptor(
+            selector_method,
+            cached=cached,
+            meta=meta,
+            out=out,
+            selector_declaration=declaration,
+        )
 
     if method is not None:
         # @field syntax

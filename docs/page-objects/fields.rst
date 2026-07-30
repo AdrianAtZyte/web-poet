@@ -30,6 +30,66 @@ For example:
         def foo(self) -> Optional[str]:
             return self.response.css(".foo").get()
 
+.. _declarative-selectors:
+
+Declarative selectors
+=====================
+
+When a field is exactly one CSS or XPath expression, you can declare that
+expression instead of writing a method for it:
+
+.. code-block:: python
+
+    import attrs
+    from web_poet import WebPage, field, selector
+
+
+    @attrs.define
+    class MyPage(WebPage):
+        price = field(".price::text", out=[float])
+        images = field(selector("img::attr(src)", all=True))
+
+``field("…")`` is a shortcut for ``field(selector("…"))``.
+
+An expression is treated as XPath if it starts with ``/``, ``./``, ``..``,
+``(`` or ``*/``, and as CSS otherwise. Pass ``syntax="css"`` or
+``syntax="xpath"`` to :func:`~web_poet.selector` to override that.
+``syntax="jmespath"`` is also supported, and required for JMESPath expressions,
+which are indistinguishable from CSS ones.
+
+.. note:: The value of a declarative field is a string, or ``None`` when there
+    is no match; with ``all=True``, a list of strings. JMESPath fields get the
+    matching JSON values.
+
+    For anything more complex, use
+    :meth:`~web_poet.mixins.SelectorShortcutsMixin.css` and
+    :meth:`~web_poet.mixins.SelectorShortcutsMixin.xpath` instead.
+
+Combining selectors
+-------------------
+
+:func:`~web_poet.selector` can also be used on its own, as a plain class
+attribute. Then it is not a field, but reading it on an instance still returns
+the extracted value. Use that to combine several declarations into a single
+field:
+
+.. code-block:: python
+
+    from typing import Optional
+
+    import attrs
+    from web_poet import WebPage, field, selector
+
+
+    @attrs.define
+    class MyPage(WebPage):
+        _sku_meta = selector("//meta[@itemprop='sku']/@content")
+        _sku_text = selector(".sku::text")
+
+        @field
+        def sku(self) -> Optional[str]:
+            return self._sku_meta or self._sku_text
+
 .. _fields-sync-async:
 
 Synchronous and asynchronous fields
@@ -580,6 +640,14 @@ provides ``css()`` and ``xpath()``:
         @field(out=[str.strip])
         def color(self) -> str:
             return self.css(".name::text").get() or ""
+
+:class:`~.SelectorExtractor` also supports :ref:`declarative selectors
+<declarative-selectors>`:
+
+.. code-block:: python
+
+    class VariantExtractor(SelectorExtractor):
+        color = field(".name::text", out=[str.strip])
 
 You can also pass other data in addition to, or instead of, selectors, such as
 dictionaries with some data:

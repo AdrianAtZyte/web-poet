@@ -102,6 +102,10 @@ Mixins
     :inherited-members:
     :no-special-members:
 
+.. autoclass:: web_poet.mixins.SelectorShortcutsMixin
+    :members:
+    :no-special-members:
+
 Requests
 ========
 
@@ -144,6 +148,8 @@ Fields
 
 .. automodule:: web_poet.fields
     :members:
+
+.. autofunction:: web_poet.selector
 
 Layouts
 =======

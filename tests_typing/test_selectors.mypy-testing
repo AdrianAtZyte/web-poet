@@ -1,0 +1,67 @@
+import attrs
+import pytest
+
+from web_poet import HttpResponse, WebPage, field, selector
+
+
+@attrs.define
+class Page(WebPage):
+    name = field("h1::text")
+    price = field(selector(".price::text"))
+    images = field(selector("img::attr(src)", all=True))
+    length = field("h1::text", out=[len])
+
+    json = field(selector("price", syntax="jmespath"))
+    jsons = field(selector("tags", syntax="jmespath", all=True))
+
+    helper = selector(".sku::text")
+    helpers = selector(".sku::text", all=True)
+
+
+@pytest.mark.mypy_testing
+def test_field_str() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.name)  # R: Union[builtins.str, None]
+
+
+@pytest.mark.mypy_testing
+def test_field_selector() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.price)  # R: Union[builtins.str, None]
+
+
+@pytest.mark.mypy_testing
+def test_field_selector_all() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.images)  # R: builtins.list[builtins.str]
+
+
+@pytest.mark.mypy_testing
+def test_field_jmespath() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.json)  # R: Any
+
+
+@pytest.mark.mypy_testing
+def test_field_jmespath_all() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.jsons)  # R: builtins.list[Any]
+
+
+@pytest.mark.mypy_testing
+def test_declaration() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.helper)  # R: Union[builtins.str, None]
+
+
+@pytest.mark.mypy_testing
+def test_declaration_all() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.helpers)  # R: builtins.list[builtins.str]
+
+
+@pytest.mark.mypy_testing
+@pytest.mark.xfail(reason="mypy does not infer field(out=...) transformed return type")
+def test_field_out() -> None:
+    page = Page(response=HttpResponse("http://example.com", b""))
+    reveal_type(page.length)  # R: builtins.int
