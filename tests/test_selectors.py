@@ -114,6 +114,13 @@ def test_class_access() -> None:
     assert _get_selectors_dict(Page)["_sku_a"] is Page._sku_a
 
 
+def test_repr() -> None:
+    assert (
+        repr(selector("img::attr(src)", all=True))
+        == "selector('img::attr(src)', all=True, syntax='css')"
+    )
+
+
 @pytest.mark.parametrize(
     ("expression", "syntax"),
     [
