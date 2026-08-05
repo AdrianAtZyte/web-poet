@@ -43,6 +43,7 @@ def test_subclassing_warning_message() -> None:
     Deprecated: Any = _create_deprecated_class("Deprecated", NewName)
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
 
         class UserClass(Deprecated):
             pass
@@ -67,6 +68,7 @@ def test_custom_class_paths() -> None:
     )
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
 
         class UserClass(Deprecated):
             pass
@@ -85,6 +87,7 @@ def test_subclassing_warns_only_on_direct_childs() -> None:
     Deprecated: Any = _create_deprecated_class("Deprecated", NewName, warn_once=False)
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
 
         class UserClass(Deprecated):
             pass
@@ -101,6 +104,7 @@ def test_subclassing_warns_once_by_default() -> None:
     Deprecated: Any = _create_deprecated_class("Deprecated", NewName)
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
 
         class UserClass(Deprecated):
             pass
@@ -127,6 +131,7 @@ def test_warning_on_instance() -> None:
             pass
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
         _, lineno = Deprecated(), inspect.getlineno(inspect.currentframe())  # type: ignore[arg-type]
         _ = UserClass()  # subclass instances don't warn
 
@@ -141,6 +146,7 @@ def test_warning_on_instance() -> None:
 
 def test_warning_auto_message() -> None:
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
         Deprecated: Any = _create_deprecated_class("Deprecated", NewName)
 
         class UserClass2(Deprecated):
@@ -252,6 +258,7 @@ def test_deprecate_subclass_of_deprecated_class() -> None:
     assert len(w) == 0, str(map(str, w))
 
     with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
         AlsoDeprecated()
 
         class UserClass(AlsoDeprecated):
@@ -270,6 +277,7 @@ def test_inspect_stack() -> None:
         mock.patch("inspect.stack", side_effect=IndexError),
         warnings.catch_warnings(record=True) as w,
     ):
+        warnings.simplefilter("always")
         DeprecatedName: Any = _create_deprecated_class("DeprecatedName", NewName)
 
         class SubClass(DeprecatedName):
