@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import re
 
 import attrs
 import parsel
 import pytest
+from cssselect.parser import SelectorSyntaxError
 
 from web_poet import (
     BrowserPage,
@@ -15,8 +17,10 @@ from web_poet import (
     Returns,
     SelectorExtractor,
     WebPage,
+    css,
     field,
-    selector,
+    jmespath,
+    xpath,
 )
 from web_poet._selectors import _get_selectors_dict
 from web_poet.testing import Fixture
@@ -42,14 +46,14 @@ def response():
 
 @attrs.define
 class Page(WebPage):
-    name = field("h1::text")
-    images = field(selector("img::attr(src)", all=True))
-    brand = field("//meta[@itemprop='brand']/@content")
-    missing = field(".missing::text")
-    missing_all = field(selector(".missing::text", all=True))
+    name = field(css("h1::text"))
+    images = field(css("img::attr(src)", all=True))
+    brand = field(xpath("//meta[@itemprop='brand']/@content"))
+    missing = field(css(".missing::text"))
+    missing_all = field(css(".missing::text", all=True))
 
-    _sku_a = selector(".sku::text")
-    _sku_b = selector("//meta[@name='sku']/@content")
+    _sku_a = css(".sku::text")
+    _sku_b = xpath("//meta[@name='sku']/@content")
 
     @field
     def sku(self) -> str | None:
@@ -84,7 +88,7 @@ def test_to_item(response) -> None:
 
 
 def test_declaration_not_a_field(response) -> None:
-    """A bare selector() attribute is readable, but is not an item field."""
+    """A bare declaration attribute is readable, but is not an item field."""
     assert "_sku_a" not in asyncio.run(Page(response=response).to_item())
 
 
@@ -100,7 +104,6 @@ def test_get_selectors_dict_before_instantiation() -> None:
         "_sku_b",
     }
     assert declarations["name"].expression == "h1::text"
-    assert declarations["name"].name == "name"
     assert declarations["images"].all is True
     assert declarations["name"].all is False
 
@@ -115,40 +118,20 @@ def test_class_access() -> None:
 
 
 def test_repr() -> None:
-    assert (
-        repr(selector("img::attr(src)", all=True))
-        == "selector('img::attr(src)', all=True, syntax='css')"
-    )
+    assert repr(css("img::attr(src)", all=True)) == "css('img::attr(src)', all=True)"
 
 
-@pytest.mark.parametrize(
-    ("expression", "syntax"),
-    [
-        ("h1::text", "css"),
-        ("  h1::text  ", "css"),
-        ("//h1/text()", "xpath"),
-        ("/html/body/h1/text()", "xpath"),
-        ("  //h1/text()", "xpath"),
-        ("./h1/text()", "xpath"),
-        ("../h1/text()", "xpath"),
-        ("(//h1)[1]/text()", "xpath"),
-        ("*/h1/text()", "xpath"),
-    ],
-)
-def test_sniffing(expression, syntax) -> None:
-    assert selector(expression).syntax == syntax
+def test_xpath_function(response) -> None:
+    """An XPath expression can be anything XPath supports."""
 
-
-def test_syntax_override(response) -> None:
     @attrs.define
-    class SyntaxPage(WebPage):
-        # Sniffed as CSS, forced to XPath.
-        name = field(selector("descendant::h1/text()", syntax="xpath"))
+    class FunctionPage(WebPage):
+        name = field(xpath("normalize-space(//h1)"))
+        images = field(xpath("count(//img)"))
 
-    assert _get_selectors_dict(SyntaxPage)["name"].syntax == "xpath"
-    assert SyntaxPage(response=response).name == " Foo "
-    # The opposite direction, which sniffing cannot get wrong on its own.
-    assert selector("//h1", syntax="css").syntax == "css"
+    page = FunctionPage(response=response)
+    assert page.name == "Foo"
+    assert page.images == "2.0"
 
 
 @pytest.mark.skipif(
@@ -158,10 +141,10 @@ def test_syntax_override(response) -> None:
 def test_jmespath() -> None:
     @attrs.define
     class JsonPage(WebPage):
-        name = field(selector("website.name", syntax="jmespath"))
-        price = field(selector("price", syntax="jmespath"))
-        tags = field(selector("tags", syntax="jmespath", all=True))
-        missing = field(selector("missing", syntax="jmespath"))
+        name = field(jmespath("website.name"))
+        price = field(jmespath("price"))
+        tags = field(jmespath("tags", all=True))
+        missing = field(jmespath("missing"))
 
     response = HttpResponse(
         "http://example.com",
@@ -181,11 +164,17 @@ def test_field_not_callable() -> None:
         field(1)  # type: ignore[call-overload]
 
 
+def test_field_expression() -> None:
+    """An expression must be wrapped in a selector declaration."""
+    with pytest.raises(TypeError, match=re.escape("Use web_poet.css()")):
+        field("h1::text")  # type: ignore[call-overload]
+
+
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):
-        name = field("h1::text", out=[str.strip])
-        images = field(selector("img::attr(src)", all=True), out=[len])
+        name = field(css("h1::text"), out=[str.strip])
+        images = field(css("img::attr(src)", all=True), out=[len])
 
     page = OutPage(response=response)
     assert page.name == "Foo"
@@ -195,7 +184,7 @@ def test_out(response) -> None:
 def test_processors(response) -> None:
     @attrs.define
     class ProcessorsPage(WebPage):
-        name = field("h1::text")
+        name = field(css("h1::text"))
 
         class Processors:
             name = [str.strip]
@@ -208,7 +197,7 @@ def test_meta() -> None:
 
     @attrs.define
     class MetaPage(WebPage):
-        name = field("h1::text", meta={"expensive": False})
+        name = field(css("h1::text"), meta={"expensive": False})
 
     assert get_fields_dict(MetaPage)["name"].meta == {"expensive": False}
 
@@ -234,7 +223,7 @@ class TestInheritance:
     def test_add(self, response) -> None:
         @attrs.define
         class SubPage(Page, Returns[dict]):
-            price = field(".price::text")
+            price = field(css(".price::text"))
 
         assert _get_selectors_dict(SubPage)["price"].expression == ".price::text"
         assert SubPage(response=response).price == "10.00"
@@ -243,7 +232,7 @@ class TestInheritance:
     def test_override(self, response) -> None:
         @attrs.define
         class SubPage(Page):
-            name = field(".price::text")
+            name = field(css(".price::text"))
 
         assert SubPage(response=response).name == "10.00"
         assert Page(response=response).name == " Foo "
@@ -275,7 +264,7 @@ class TestInheritance:
 def test_selector_extractor() -> None:
     @attrs.define
     class Extractor(SelectorExtractor):
-        name = field("h1::text", out=[str.strip])
+        name = field(css("h1::text"), out=[str.strip])
 
     sel = parsel.Selector(HTML)
     assert asyncio.run(Extractor(sel).to_item()) == {"name": "Foo"}
@@ -284,13 +273,14 @@ def test_selector_extractor() -> None:
 def test_browser_page() -> None:
     @attrs.define
     class Page(BrowserPage):
-        name = field("h1::text", out=[str.strip])
+        name = field(css("h1::text"), out=[str.strip])
 
     response = BrowserResponse(url="http://example.com", html=HTML)
     assert asyncio.run(Page(response=response).to_item()) == {"name": "Foo"}
 
 
-def test_single_extraction_pass(response) -> None:
+def test_lazy_extraction(response) -> None:
+    """Declarations are extracted one at a time, on demand."""
     calls = []
 
     @attrs.define
@@ -300,18 +290,94 @@ def test_single_extraction_pass(response) -> None:
             return super()._extract_selectors(declarations)
 
     page = CountingPage(response=response)
-    asyncio.run(page.to_item())
-    assert len(calls) == 1
-    assert set(calls[0]) == set(_get_selectors_dict(CountingPage))
+    assert page.name == " Foo "
+    assert [set(call) for call in calls] == [{"name"}]
     # Repeated access does not extract again.
     assert page.name == " Foo "
     assert len(calls) == 1
 
 
+def test_single_extraction_pass(response) -> None:
+    """A backend that extracts every declaration at once is only called
+    once."""
+    calls = []
+
+    @attrs.define
+    class BatchPage(Page):
+        def _extract_selectors(self, declarations):
+            calls.append(declarations)
+            return super()._extract_selectors(_get_selectors_dict(self))
+
+    page = BatchPage(response=response)
+    asyncio.run(page.to_item())
+    assert len(calls) == 1
+    assert page.name == " Foo "
+    assert len(calls) == 1
+
+
+def test_broken_declaration(response) -> None:
+    """A broken declaration only affects its own field."""
+
+    @attrs.define
+    class BrokenPage(WebPage):
+        name = field(css("h1::text"))
+        broken = field(css("::::"))
+
+    page = BrokenPage(response=response)
+    assert page.name == " Foo "
+    with pytest.raises(SelectorSyntaxError):
+        page.broken
+
+
+def test_shared_declaration(response) -> None:
+    """The same declaration object can be used by different attributes and
+    classes."""
+    shared = css(".sku::text")
+
+    @attrs.define
+    class PageA(WebPage):
+        a = field(shared)
+        also_a = shared
+
+    @attrs.define
+    class PageB(WebPage):
+        b = field(shared)
+
+    assert PageA(response=response).a == "SKU-1"
+    assert PageA(response=response).also_a == "SKU-1"
+    assert PageB(response=response).b == "SKU-1"
+
+
+def test_query_method_name(response) -> None:
+    """A field can be named after a query method."""
+
+    @attrs.define
+    class QueryPage(WebPage):
+        css = field(css("h1::text"))  # type: ignore[assignment]
+        xpath = field(xpath("//h1/text()"))  # type: ignore[assignment]
+
+    page = QueryPage(response=response)
+    assert page.css == " Foo "
+    assert page.xpath == " Foo "
+
+
+def test_late_declaration(response) -> None:
+    """Declarations set after the class definition are not supported."""
+
+    @attrs.define
+    class LatePage(WebPage):
+        name = field(css("h1::text"))
+
+    assert LatePage(response=response).name == " Foo "
+    LatePage.late = css(".sku::text")  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="must be set as class attributes"):
+        LatePage(response=response).late  # type: ignore[attr-defined]
+
+
 def test_no_selector() -> None:
     @attrs.define
     class NoSelectorPage(ItemPage):
-        name = field("h1::text")
+        name = field(css("h1::text"))
 
     with pytest.raises(TypeError, match="provides no parsel selector"):
         NoSelectorPage().name

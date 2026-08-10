@@ -14,7 +14,7 @@ from typing import Any, Generic, TypeVar, cast, overload
 import attrs
 from itemadapter import ItemAdapter
 
-from web_poet._selectors import _selector_values, _SelectorDeclaration
+from web_poet._selectors import _declaration_value, _SelectorDeclaration
 from web_poet.utils import cached_method, callable_has_parameter, ensure_awaitable
 
 _FIELDS_INFO_ATTRIBUTE_READ = "_web_poet_fields_info"
@@ -89,7 +89,6 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
     def __set_name__(self, owner, name: str) -> None:
         self.name = name
         if self.selector_declaration is not None:
-            self.selector_declaration.__set_name__(owner, name)
             # Input validation looks the field up on the validation item by the
             # name of the method, and the method here is a generated closure.
             self.original_method.__name__ = name
@@ -184,16 +183,6 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
 
 @overload
 def field(
-    method: str,
-    *,
-    cached: bool = False,
-    meta: dict | None = None,
-    out: list[Callable] | None = None,
-) -> _FieldDescriptor[Any, str | None]: ...
-
-
-@overload
-def field(
     method: _SelectorDeclaration[_ReturnT],
     *,
     cached: bool = False,
@@ -223,7 +212,7 @@ def field(
 
 
 def field(
-    method: _FieldMethod[Any, Any] | _SelectorDeclaration | str | None = None,
+    method: _FieldMethod[Any, Any] | _SelectorDeclaration | None = None,
     *,
     cached: bool = False,
     meta: dict | None = None,
@@ -234,8 +223,9 @@ def field(
     which is then used by :class:`~.ItemPage`'s to_item() method to populate a
     corresponding item attribute.
 
-    Instead of a method, you can pass a CSS or XPath expression, or a
-    :func:`~web_poet.selector` declaration. See :ref:`declarative-selectors`.
+    Instead of a method, you can pass a selector declaration from
+    :func:`~web_poet.css`, :func:`~web_poet.xpath` or
+    :func:`~web_poet.jmespath`. See :ref:`declarative-selectors`.
 
     By default, the value is computed on each property access. Use
     ``@field(cached=True)`` to cache the property value.
@@ -249,14 +239,18 @@ def field(
     """
 
     if isinstance(method, str):
-        method = _SelectorDeclaration(method)
+        raise TypeError(
+            f"Expected a method or a selector declaration, got the string "
+            f"{method!r}. Use web_poet.css(), web_poet.xpath() or "
+            f"web_poet.jmespath() to declare a selector."
+        )
 
     if isinstance(method, _SelectorDeclaration):
-        # field(selector(...)) syntax
+        # field(css(...)) syntax
         declaration = method
 
         def selector_method(page):
-            return _selector_values(page)[declaration.name]
+            return _declaration_value(page, declaration)
 
         return _FieldDescriptor(
             selector_method,

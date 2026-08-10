@@ -35,59 +35,55 @@ For example:
 Declarative selectors
 =====================
 
-When a field is exactly one CSS or XPath expression, you can declare that
-expression instead of writing a method for it:
+When a field is exactly one selector, you can declare that selector instead of
+writing a method for it:
 
 .. code-block:: python
 
     import attrs
-    from web_poet import WebPage, field, selector
+    from web_poet import WebPage, css, field, xpath
+    from zyte_parsers import extract_price
 
 
     @attrs.define
     class MyPage(WebPage):
-        price = field(".price::text", out=[float])
-        images = field(selector("img::attr(src)", all=True))
+        price = field(css(".price::text"), out=[extract_price])
+        brand = field(xpath("//meta[@itemprop='brand']/@content"))
+        images = field(css("img::attr(src)", all=True))
 
-``field("…")`` is a shortcut for ``field(selector("…"))``.
-
-An expression is treated as XPath if it starts with ``/``, ``./``, ``..``,
-``(`` or ``*/``, and as CSS otherwise. Pass ``syntax="css"`` or
-``syntax="xpath"`` to :func:`~web_poet.selector` to override that.
-``syntax="jmespath"`` is also supported, and required for JMESPath expressions,
-which are indistinguishable from CSS ones.
+:func:`~web_poet.jmespath` declarations are also supported.
 
 .. note:: The value of a declarative field is a string, or ``None`` when there
     is no match; with ``all=True``, a list of strings. JMESPath fields get the
     matching JSON values.
 
-    For anything more complex, use
+    :ref:`Field processors <field-processors>` must handle ``None``, as
+    :func:`~zyte_parsers.extract_price` above does.
+
+    For anything more complex, use the
     :meth:`~web_poet.mixins.SelectorShortcutsMixin.css` and
-    :meth:`~web_poet.mixins.SelectorShortcutsMixin.xpath` instead.
+    :meth:`~web_poet.mixins.SelectorShortcutsMixin.xpath` methods instead.
 
 Combining selectors
 -------------------
 
-:func:`~web_poet.selector` can also be used on its own, as a plain class
-attribute. Then it is not a field, but reading it on an instance still returns
-the extracted value. Use that to combine several declarations into a single
-field:
+Selector declarations can also be used on their own, as plain class attributes.
+Then they are not fields, but reading them on an instance still returns the
+extracted value. Use that to combine several declarations into a single field:
 
 .. code-block:: python
 
-    from typing import Optional
-
     import attrs
-    from web_poet import WebPage, field, selector
+    from web_poet import WebPage, css, field, xpath
 
 
     @attrs.define
     class MyPage(WebPage):
-        _sku_meta = selector("//meta[@itemprop='sku']/@content")
-        _sku_text = selector(".sku::text")
+        _sku_meta = xpath("//meta[@itemprop='sku']/@content")
+        _sku_text = css(".sku::text")
 
         @field
-        def sku(self) -> Optional[str]:
+        def sku(self) -> str | None:
             return self._sku_meta or self._sku_text
 
 .. _fields-sync-async:
@@ -647,7 +643,7 @@ provides ``css()`` and ``xpath()``:
 .. code-block:: python
 
     class VariantExtractor(SelectorExtractor):
-        color = field(".name::text", out=[str.strip])
+        color = field(css(".name::text"))
 
 You can also pass other data in addition to, or instead of, selectors, such as
 dictionaries with some data:

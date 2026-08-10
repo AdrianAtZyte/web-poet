@@ -8,32 +8,21 @@ _ValueT = TypeVar("_ValueT")
 
 _SelectorSyntax = Literal["css", "xpath", "jmespath"]
 
-# Stripped expression prefixes that make an expression be sniffed as XPath.
-_XPATH_PREFIXES = ("/", "./", "..", "(", "*/")
-
 
 class _SelectorDeclaration(Generic[_ValueT]):
     def __init__(
         self,
         expression: str,
+        syntax: _SelectorSyntax,
         *,
         all: bool = False,
-        syntax: _SelectorSyntax | None = None,
     ):
         self.expression = expression
+        self.syntax = syntax
         self.all = all
-        self.syntax: _SelectorSyntax = syntax or (
-            "xpath" if expression.strip().startswith(_XPATH_PREFIXES) else "css"
-        )
-        self.name: str | None = None
 
     def __repr__(self) -> str:
-        return (
-            f"selector({self.expression!r}, all={self.all!r}, syntax={self.syntax!r})"
-        )
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        self.name = name
+        return f"{self.syntax}({self.expression!r}, all={self.all!r})"
 
     @overload
     def __get__(
@@ -46,72 +35,111 @@ class _SelectorDeclaration(Generic[_ValueT]):
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
-        return _selector_values(instance)[self.name]
+        return _declaration_value(instance, self)
 
 
 @overload
-def selector(
-    expression: str,
-    *,
-    all: Literal[False] = False,
-    syntax: Literal["css", "xpath"] | None = None,
+def css(
+    expression: str, *, all: Literal[False] = False
 ) -> _SelectorDeclaration[str | None]: ...
 
 
 @overload
-def selector(
-    expression: str,
-    *,
-    all: Literal[True],
-    syntax: Literal["css", "xpath"] | None = None,
+def css(expression: str, *, all: Literal[True]) -> _SelectorDeclaration[list[str]]: ...
+
+
+@overload
+def css(expression: str, *, all: bool) -> _SelectorDeclaration[Any]: ...
+
+
+def css(expression: str, *, all: bool = False) -> _SelectorDeclaration[Any]:
+    """Return a declaration of the CSS *expression*, to be used as a class
+    attribute of a page object class, either on its own or through
+    :func:`~web_poet.field`.
+
+    Set *all* to ``True`` to get the values of all matches instead of the value
+    of the first match.
+
+    See :ref:`declarative-selectors`.
+    """
+    return _SelectorDeclaration(expression, "css", all=all)
+
+
+@overload
+def xpath(
+    expression: str, *, all: Literal[False] = False
+) -> _SelectorDeclaration[str | None]: ...
+
+
+@overload
+def xpath(
+    expression: str, *, all: Literal[True]
 ) -> _SelectorDeclaration[list[str]]: ...
 
 
 @overload
-def selector(
-    expression: str,
-    *,
-    syntax: Literal["jmespath"],
-    all: Literal[False] = False,
+def xpath(expression: str, *, all: bool) -> _SelectorDeclaration[Any]: ...
+
+
+def xpath(expression: str, *, all: bool = False) -> _SelectorDeclaration[Any]:
+    """Return a declaration of the XPath *expression*.
+
+    See :func:`~web_poet.css`.
+    """
+    return _SelectorDeclaration(expression, "xpath", all=all)
+
+
+@overload
+def jmespath(
+    expression: str, *, all: Literal[False] = False
 ) -> _SelectorDeclaration[Any]: ...
 
 
 @overload
-def selector(
-    expression: str,
-    *,
-    syntax: Literal["jmespath"],
-    all: Literal[True],
+def jmespath(
+    expression: str, *, all: Literal[True]
 ) -> _SelectorDeclaration[list[Any]]: ...
 
 
-def selector(
-    expression: str,
-    *,
-    all: bool = False,
-    syntax: _SelectorSyntax | None = None,
-) -> _SelectorDeclaration[Any]:
-    """Return a declaration of *expression*, to be used as a class attribute of
-    a page object class, either on its own or through
-    :func:`~web_poet.field`.
+@overload
+def jmespath(expression: str, *, all: bool) -> _SelectorDeclaration[Any]: ...
 
-    See :ref:`declarative-selectors`.
+
+def jmespath(expression: str, *, all: bool = False) -> _SelectorDeclaration[Any]:
+    """Return a declaration of the JMESPath *expression*.
+
+    See :func:`~web_poet.css`.
     """
-    return _SelectorDeclaration(expression, all=all, syntax=syntax)
+    return _SelectorDeclaration(expression, "jmespath", all=all)
 
 
-def _selector_values(instance: Any) -> dict[str, Any]:
-    """Return the values of all selector declarations of *instance*, raising
-    ``TypeError`` if it has no selector to extract them from."""
+def _declaration_value(instance: Any, declaration: _SelectorDeclaration) -> Any:
+    """Return the value of *declaration* for *instance*, raising ``TypeError``
+    if *instance* has no selector to extract it from."""
     try:
-        get_values = instance._selector_values
+        get_value = instance._selector_value
     except AttributeError:
         raise TypeError(
             f"{type(instance).__name__} does not support selector declarations, "
             f"it provides no parsel selector. Inherit from a class that does, "
             f"e.g. web_poet.WebPage or web_poet.SelectorExtractor."
         ) from None
-    return get_values()
+    return get_value(_declaration_name(instance, declaration))
+
+
+def _declaration_name(instance: Any, declaration: _SelectorDeclaration) -> str:
+    """Return the attribute name that *declaration* has on *instance*.
+
+    A declaration object can be shared by any number of attributes and classes,
+    so its name depends on where it is looked up."""
+    for name, candidate in _get_selectors_dict(instance).items():
+        if candidate is declaration:
+            return name
+    raise ValueError(
+        f"{declaration!r} is not among the selector declarations of "
+        f"{type(instance).__name__}. Selector declarations must be set as class "
+        f"attributes in the class definition."
+    )
 
 
 def _get_declaration(value: Any) -> _SelectorDeclaration | None:
@@ -121,9 +149,8 @@ def _get_declaration(value: Any) -> _SelectorDeclaration | None:
 
 
 def _get_selectors_dict(cls_or_instance) -> dict[str, _SelectorDeclaration]:
-    """Return a dictionary with the :func:`~web_poet.selector` declarations of
-    a class or instance: keys are attribute names, and values are declaration
-    objects."""
+    """Return a dictionary with the selector declarations of a class or
+    instance: keys are attribute names, and values are declaration objects."""
     cls = (
         cls_or_instance if isinstance(cls_or_instance, type) else type(cls_or_instance)
     )

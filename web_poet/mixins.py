@@ -43,22 +43,36 @@ class SelectorShortcutsMixin:
         return self.selector.jmespath(query, **kwargs)  # type: ignore[attr-defined]
 
     @cached_method
-    def _selector_values(self) -> dict[str, Any]:
-        """Return the values of all selector declarations of this object,
-        extracting them on the first call."""
-        return self._extract_selectors(_get_selectors_dict(self))
+    def _selector_value_cache(self) -> dict[str, Any]:
+        return {}
+
+    def _selector_value(self, name: str) -> Any:
+        """Return the value of the selector declaration of this object named
+        *name*, extracting it on the first call."""
+        values = self._selector_value_cache()
+        if name not in values:
+            declaration = _get_selectors_dict(self)[name]
+            values.update(self._extract_selectors({name: declaration}))
+        return values[name]
 
     def _extract_selectors(
         self, declarations: dict[str, _SelectorDeclaration]
     ) -> dict[str, Any]:
-        """Return a value for every declaration in *declarations*.
+        """Return a value for every declaration in *declarations*, a mapping of
+        attribute name to declaration object.
 
-        Override this to use an alternative extraction backend, e.g. one that
-        extracts all declarations in a single pass."""
+        Values for declarations beyond those requested may be included in the
+        returned mapping; they are cached and reused. So an implementation that
+        extracts every declaration of the object in a single pass, as reported
+        by ``_get_selectors_dict()``, only runs once.
+
+        Override this to use an alternative extraction backend."""
         values = {}
         for name, declaration in declarations.items():
-            query = getattr(self, declaration.syntax)
-            selector_list = query(declaration.expression)
+            # Going through the mixin, and not through self, keeps a field
+            # named css, xpath or jmespath from shadowing the query method.
+            query = getattr(SelectorShortcutsMixin, declaration.syntax)
+            selector_list = query(self, declaration.expression)
             values[name] = (
                 selector_list.getall() if declaration.all else selector_list.get()
             )

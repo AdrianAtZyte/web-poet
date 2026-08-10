@@ -1,5 +1,5 @@
 from ._layouts import layout_switch
-from ._selectors import selector
+from ._selectors import css, jmespath, xpath
 from .annotated import AnnotatedInstance, annotation_decode, annotation_encode
 from .fields import field, item_from_fields, item_from_fields_sync
 from .page_inputs import (
@@ -65,15 +65,17 @@ __all__ = [
     "annotation_encode",
     "cached_method",
     "consume_modules",
+    "css",
     "default_registry",
     "field",
     "handle_urls",
     "item_from_fields",
     "item_from_fields_sync",
+    "jmespath",
     "layout_switch",
     "request_downloader_var",
-    "selector",
     "validates_input",
+    "xpath",
 ]
 
 default_registry = RulesRegistry()

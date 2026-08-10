@@ -149,7 +149,11 @@ Fields
 .. automodule:: web_poet.fields
     :members:
 
-.. autofunction:: web_poet.selector
+.. autofunction:: web_poet.css
+
+.. autofunction:: web_poet.xpath
+
+.. autofunction:: web_poet.jmespath
 
 Layouts
 =======
