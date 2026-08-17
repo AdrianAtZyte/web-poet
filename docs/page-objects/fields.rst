@@ -41,50 +41,61 @@ writing a method for it:
 .. code-block:: python
 
     import attrs
-    from web_poet import WebPage, css, field, xpath
+    from web_poet import WebPage, css_get, css_getall, field, xpath_get
     from zyte_parsers import extract_price
 
 
     @attrs.define
     class MyPage(WebPage):
-        price = field(css(".price::text"), out=[extract_price])
-        brand = field(xpath("//meta[@itemprop='brand']/@content"))
-        images = field(css("img::attr(src)", all=True))
+        price = field(css_get(".price::text"), out=[extract_price])
+        brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
+        images = field(css_getall("img::attr(src)"))
 
-:func:`~web_poet.jmespath` declarations are also supported.
+:func:`~web_poet.jmespath_get` and :func:`~web_poet.jmespath_getall`
+declarations are also supported, and their values are the matching JSON values.
 
-.. note:: The value of a declarative field is a string, or ``None`` when there
-    is no match; with ``all=True``, a list of strings. JMESPath fields get the
-    matching JSON values.
-
-    :ref:`Field processors <field-processors>` must handle ``None``, as
+.. note:: :ref:`Field processors <field-processors>` must handle ``None``, as
     :func:`~zyte_parsers.extract_price` above does.
-
-    For anything more complex, use the
-    :meth:`~web_poet.mixins.SelectorShortcutsMixin.css` and
-    :meth:`~web_poet.mixins.SelectorShortcutsMixin.xpath` methods instead.
 
 Combining selectors
 -------------------
 
 Selector declarations can also be used on their own, as plain class attributes.
-Then they are not fields, but reading them on an instance still returns the
-extracted value. Use that to combine several declarations into a single field:
+Then they are not fields, but reading them on an instance still returns their
+value. Use that to combine several declarations into a single field:
 
 .. code-block:: python
 
     import attrs
-    from web_poet import WebPage, css, field, xpath
+    from web_poet import WebPage, css_get, field, xpath_get
 
 
     @attrs.define
     class MyPage(WebPage):
-        _sku_meta = xpath("//meta[@itemprop='sku']/@content")
-        _sku_text = css(".sku::text")
+        _sku_meta = xpath_get("//meta[@itemprop='sku']/@content")
+        _sku_text = css_get(".sku::text")
 
         @field
         def sku(self) -> str | None:
             return self._sku_meta or self._sku_text
+
+:func:`~web_poet.css`, :func:`~web_poet.xpath` and :func:`~web_poet.jmespath`
+declare a :class:`~parsel.selector.SelectorList` instead of an extracted value,
+so that you can query it further, e.g. to read JSON embedded in a web page:
+
+.. code-block:: python
+
+    import attrs
+    from web_poet import WebPage, css, field
+
+
+    @attrs.define
+    class MyPage(WebPage):
+        _ld = css('script[type="application/ld+json"]::text')
+
+        @field
+        def price(self) -> str | None:
+            return self._ld.jmespath("offers.price").get()
 
 .. _fields-sync-async:
 
@@ -643,7 +654,7 @@ provides ``css()`` and ``xpath()``:
 .. code-block:: python
 
     class VariantExtractor(SelectorExtractor):
-        color = field(css(".name::text"))
+        color = field(css_get(".name::text"))
 
 You can also pass other data in addition to, or instead of, selectors, such as
 dictionaries with some data:

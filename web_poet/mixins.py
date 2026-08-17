@@ -73,8 +73,12 @@ class SelectorShortcutsMixin:
             # named css, xpath or jmespath from shadowing the query method.
             query = getattr(SelectorShortcutsMixin, declaration.syntax)
             selector_list = query(self, declaration.expression)
+            # Modes other than selector are named after the parsel selector
+            # list method that implements them.
             values[name] = (
-                selector_list.getall() if declaration.all else selector_list.get()
+                selector_list
+                if declaration.mode == "selector"
+                else getattr(selector_list, declaration.mode)()
             )
         return values
 

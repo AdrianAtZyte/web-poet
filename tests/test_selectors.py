@@ -7,6 +7,8 @@ import attrs
 import parsel
 import pytest
 from cssselect.parser import SelectorSyntaxError
+from cssselect.xpath import ExpressionError
+from lxml.etree import XPathSyntaxError  # type: ignore[import-untyped]
 
 from web_poet import (
     BrowserPage,
@@ -18,9 +20,12 @@ from web_poet import (
     SelectorExtractor,
     WebPage,
     css,
+    css_get,
+    css_getall,
     field,
-    jmespath,
-    xpath,
+    jmespath_get,
+    jmespath_getall,
+    xpath_get,
 )
 from web_poet._selectors import _get_selectors_dict
 from web_poet.testing import Fixture
@@ -46,14 +51,14 @@ def response():
 
 @attrs.define
 class Page(WebPage):
-    name = field(css("h1::text"))
-    images = field(css("img::attr(src)", all=True))
-    brand = field(xpath("//meta[@itemprop='brand']/@content"))
-    missing = field(css(".missing::text"))
-    missing_all = field(css(".missing::text", all=True))
+    name = field(css_get("h1::text"))
+    images = field(css_getall("img::attr(src)"))
+    brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
+    missing = field(css_get(".missing::text"))
+    missing_all = field(css_getall(".missing::text"))
 
-    _sku_a = css(".sku::text")
-    _sku_b = xpath("//meta[@name='sku']/@content")
+    _sku_a = css_get(".sku::text")
+    _sku_b = xpath_get("//meta[@name='sku']/@content")
 
     @field
     def sku(self) -> str | None:
@@ -104,8 +109,8 @@ def test_get_selectors_dict_before_instantiation() -> None:
         "_sku_b",
     }
     assert declarations["name"].expression == "h1::text"
-    assert declarations["images"].all is True
-    assert declarations["name"].all is False
+    assert declarations["images"].mode == "getall"
+    assert declarations["name"].mode == "get"
 
 
 def test_get_selectors_dict_instance(response) -> None:
@@ -118,7 +123,7 @@ def test_class_access() -> None:
 
 
 def test_repr() -> None:
-    assert repr(css("img::attr(src)", all=True)) == "css('img::attr(src)', all=True)"
+    assert repr(css_getall("img::attr(src)")) == "css_getall('img::attr(src)')"
 
 
 def test_xpath_function(response) -> None:
@@ -126,8 +131,8 @@ def test_xpath_function(response) -> None:
 
     @attrs.define
     class FunctionPage(WebPage):
-        name = field(xpath("normalize-space(//h1)"))
-        images = field(xpath("count(//img)"))
+        name = field(xpath_get("normalize-space(//h1)"))
+        images = field(xpath_get("count(//img)"))
 
     page = FunctionPage(response=response)
     assert page.name == "Foo"
@@ -141,10 +146,10 @@ def test_xpath_function(response) -> None:
 def test_jmespath() -> None:
     @attrs.define
     class JsonPage(WebPage):
-        name = field(jmespath("website.name"))
-        price = field(jmespath("price"))
-        tags = field(jmespath("tags", all=True))
-        missing = field(jmespath("missing"))
+        name = field(jmespath_get("website.name"))
+        price = field(jmespath_get("price"))
+        tags = field(jmespath_getall("tags"))
+        missing = field(jmespath_get("missing"))
 
     response = HttpResponse(
         "http://example.com",
@@ -159,6 +164,51 @@ def test_jmespath() -> None:
     }
 
 
+@pytest.mark.skipif(
+    not hasattr(parsel.Selector, "jmespath"),
+    reason="parsel < 1.8 doesn't support jmespath",
+)
+def test_jmespath_in_html() -> None:
+    """A selector declaration can be queried further, e.g. to read JSON
+    embedded in a web page with JMESPath."""
+
+    @attrs.define
+    class LdJsonPage(WebPage):
+        _ld = css('script[type="application/ld+json"]::text')
+
+        @field
+        def price(self) -> str | None:
+            return self._ld.jmespath("offers.price").get()
+
+        @field
+        def currency(self) -> str | None:
+            return self._ld.jmespath("offers.currency").get()
+
+    response = HttpResponse(
+        "http://example.com",
+        b"""<script type="application/ld+json">
+        {"offers": {"price": "10.00", "currency": "USD"}}</script>""",
+        encoding="utf-8",
+    )
+    page = LdJsonPage(response=response)
+    assert page.price == "10.00"
+    assert page.currency == "USD"
+
+
+def test_selector_declaration(response) -> None:
+    """The value of a selector declaration is a parsel selector list, which is
+    empty when there is no match."""
+
+    @attrs.define
+    class SelectorPage(WebPage):
+        price = css(".price")
+        missing = css(".missing")
+
+    page = SelectorPage(response=response)
+    assert page.price.css("::text").get() == "10.00"
+    assert page.missing.css("::text").get() is None
+
+
 def test_field_not_callable() -> None:
     with pytest.raises(TypeError, match="must be used on methods"):
         field(1)  # type: ignore[call-overload]
@@ -166,15 +216,15 @@ def test_field_not_callable() -> None:
 
 def test_field_expression() -> None:
     """An expression must be wrapped in a selector declaration."""
-    with pytest.raises(TypeError, match=re.escape("Use web_poet.css()")):
+    with pytest.raises(TypeError, match=re.escape("Use web_poet.css_get()")):
         field("h1::text")  # type: ignore[call-overload]
 
 
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):
-        name = field(css("h1::text"), out=[str.strip])
-        images = field(css("img::attr(src)", all=True), out=[len])
+        name = field(css_get("h1::text"), out=[str.strip])
+        images = field(css_getall("img::attr(src)"), out=[len])
 
     page = OutPage(response=response)
     assert page.name == "Foo"
@@ -184,7 +234,7 @@ def test_out(response) -> None:
 def test_processors(response) -> None:
     @attrs.define
     class ProcessorsPage(WebPage):
-        name = field(css("h1::text"))
+        name = field(css_get("h1::text"))
 
         class Processors:
             name = [str.strip]
@@ -197,7 +247,7 @@ def test_meta() -> None:
 
     @attrs.define
     class MetaPage(WebPage):
-        name = field(css("h1::text"), meta={"expensive": False})
+        name = field(css_get("h1::text"), meta={"expensive": False})
 
     assert get_fields_dict(MetaPage)["name"].meta == {"expensive": False}
 
@@ -223,7 +273,7 @@ class TestInheritance:
     def test_add(self, response) -> None:
         @attrs.define
         class SubPage(Page, Returns[dict]):
-            price = field(css(".price::text"))
+            price = field(css_get(".price::text"))
 
         assert _get_selectors_dict(SubPage)["price"].expression == ".price::text"
         assert SubPage(response=response).price == "10.00"
@@ -232,7 +282,7 @@ class TestInheritance:
     def test_override(self, response) -> None:
         @attrs.define
         class SubPage(Page):
-            name = field(css(".price::text"))
+            name = field(css_get(".price::text"))
 
         assert SubPage(response=response).name == "10.00"
         assert Page(response=response).name == " Foo "
@@ -264,7 +314,7 @@ class TestInheritance:
 def test_selector_extractor() -> None:
     @attrs.define
     class Extractor(SelectorExtractor):
-        name = field(css("h1::text"), out=[str.strip])
+        name = field(css_get("h1::text"), out=[str.strip])
 
     sel = parsel.Selector(HTML)
     assert asyncio.run(Extractor(sel).to_item()) == {"name": "Foo"}
@@ -273,78 +323,99 @@ def test_selector_extractor() -> None:
 def test_browser_page() -> None:
     @attrs.define
     class Page(BrowserPage):
-        name = field(css("h1::text"), out=[str.strip])
+        name = field(css_get("h1::text"), out=[str.strip])
 
     response = BrowserResponse(url="http://example.com", html=HTML)
     assert asyncio.run(Page(response=response).to_item()) == {"name": "Foo"}
 
 
-def test_lazy_extraction(response) -> None:
-    """Declarations are extracted one at a time, on demand."""
+def test_extraction_is_lazy(response) -> None:
+    """Reading a declaration extracts that declaration alone, and caches its
+    value."""
+    page = Page(response=response)
+    assert page.name == " Foo "
+    assert page._selector_value_cache() == {"name": " Foo "}
+
+
+def test_single_pass_extraction(response) -> None:
+    """An extraction backend that answers every declaration of a page object in
+    a single pass runs once, and the values that it returns for declarations
+    other than the requested one are reused."""
     calls = []
 
     @attrs.define
-    class CountingPage(Page):
+    class SinglePassPage(Page):
         def _extract_selectors(self, declarations):
-            calls.append(declarations)
-            return super()._extract_selectors(declarations)
-
-    page = CountingPage(response=response)
-    assert page.name == " Foo "
-    assert [set(call) for call in calls] == [{"name"}]
-    # Repeated access does not extract again.
-    assert page.name == " Foo "
-    assert len(calls) == 1
-
-
-def test_single_extraction_pass(response) -> None:
-    """A backend that extracts every declaration at once is only called
-    once."""
-    calls = []
-
-    @attrs.define
-    class BatchPage(Page):
-        def _extract_selectors(self, declarations):
-            calls.append(declarations)
+            calls.append(set(declarations))
             return super()._extract_selectors(_get_selectors_dict(self))
 
-    page = BatchPage(response=response)
-    asyncio.run(page.to_item())
-    assert len(calls) == 1
-    assert page.name == " Foo "
-    assert len(calls) == 1
+    page = SinglePassPage(response=response)
+    assert asyncio.run(page.to_item()) == asyncio.run(Page(response=response).to_item())
+    assert calls == [{"name"}]
 
 
-def test_broken_declaration(response) -> None:
-    """A broken declaration only affects its own field."""
+def test_invalid_expression() -> None:
+    """An invalid expression fails on declaration."""
+    with pytest.raises(SelectorSyntaxError):
+        css_get("::::")
+    with pytest.raises(ExpressionError):
+        css_get("h1::txt")
+    with pytest.raises(XPathSyntaxError):
+        xpath_get("//h1[")
+
+
+def test_invalid_jmespath_expression() -> None:
+    exceptions = pytest.importorskip("jmespath.exceptions")
+    with pytest.raises(exceptions.ParseError):
+        jmespath_get("website.")
+
+
+def test_extraction_error(response) -> None:
+    """A declaration that fails on extraction only affects its own field."""
 
     @attrs.define
     class BrokenPage(WebPage):
-        name = field(css("h1::text"))
-        broken = field(css("::::"))
+        name = field(css_get("h1::text"))
+        broken = field(xpath_get("//*[unregistered()]"))
 
     page = BrokenPage(response=response)
     assert page.name == " Foo "
-    with pytest.raises(SelectorSyntaxError):
+    with pytest.raises(ValueError, match="Unregistered function"):
         page.broken
 
 
+def test_reused_declaration(response) -> None:
+    """A declaration can be reused, e.g. by a field that processes its value
+    and by a field that composes something else out of the raw value."""
+
+    @attrs.define
+    class ReusePage(WebPage):
+        _raw_price = css_get(".price::text")
+        price = field(_raw_price, out=[float])
+
+        @field
+        def price_label(self) -> str:
+            return f"only {self._raw_price}!"
+
+    page = ReusePage(response=response)
+    assert page.price == 10.0
+    assert page.price_label == "only 10.00!"
+
+
 def test_shared_declaration(response) -> None:
-    """The same declaration object can be used by different attributes and
-    classes."""
-    shared = css(".sku::text")
+    """The same declaration object can be used by different classes, e.g. as a
+    module-level constant."""
+    shared = css_get(".sku::text")
 
     @attrs.define
     class PageA(WebPage):
         a = field(shared)
-        also_a = shared
 
     @attrs.define
     class PageB(WebPage):
         b = field(shared)
 
     assert PageA(response=response).a == "SKU-1"
-    assert PageA(response=response).also_a == "SKU-1"
     assert PageB(response=response).b == "SKU-1"
 
 
@@ -353,8 +424,8 @@ def test_query_method_name(response) -> None:
 
     @attrs.define
     class QueryPage(WebPage):
-        css = field(css("h1::text"))  # type: ignore[assignment]
-        xpath = field(xpath("//h1/text()"))  # type: ignore[assignment]
+        css = field(css_get("h1::text"))  # type: ignore[assignment]
+        xpath = field(xpath_get("//h1/text()"))  # type: ignore[assignment]
 
     page = QueryPage(response=response)
     assert page.css == " Foo "
@@ -366,10 +437,10 @@ def test_late_declaration(response) -> None:
 
     @attrs.define
     class LatePage(WebPage):
-        name = field(css("h1::text"))
+        name = field(css_get("h1::text"))
 
     assert LatePage(response=response).name == " Foo "
-    LatePage.late = css(".sku::text")  # type: ignore[attr-defined]
+    LatePage.late = css_get(".sku::text")  # type: ignore[attr-defined]
     with pytest.raises(ValueError, match="must be set as class attributes"):
         LatePage(response=response).late  # type: ignore[attr-defined]
 
@@ -377,7 +448,7 @@ def test_late_declaration(response) -> None:
 def test_no_selector() -> None:
     @attrs.define
     class NoSelectorPage(ItemPage):
-        name = field(css("h1::text"))
+        name = field(css_get("h1::text"))
 
     with pytest.raises(TypeError, match="provides no parsel selector"):
         NoSelectorPage().name

@@ -223,9 +223,8 @@ def field(
     which is then used by :class:`~.ItemPage`'s to_item() method to populate a
     corresponding item attribute.
 
-    Instead of a method, you can pass a selector declaration from
-    :func:`~web_poet.css`, :func:`~web_poet.xpath` or
-    :func:`~web_poet.jmespath`. See :ref:`declarative-selectors`.
+    Instead of a method, you can pass a selector declaration, e.g. from
+    :func:`~web_poet.css_get`. See :ref:`declarative-selectors`.
 
     By default, the value is computed on each property access. Use
     ``@field(cached=True)`` to cache the property value.
@@ -241,12 +240,12 @@ def field(
     if isinstance(method, str):
         raise TypeError(
             f"Expected a method or a selector declaration, got the string "
-            f"{method!r}. Use web_poet.css(), web_poet.xpath() or "
-            f"web_poet.jmespath() to declare a selector."
+            f"{method!r}. Use web_poet.css_get(), web_poet.xpath_get() or one "
+            f"of their variants to declare a selector."
         )
 
     if isinstance(method, _SelectorDeclaration):
-        # field(css(...)) syntax
+        # field(css_get(...)) syntax
         declaration = method
 
         def selector_method(page):
