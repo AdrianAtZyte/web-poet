@@ -20,12 +20,9 @@ from web_poet import (
     SelectorExtractor,
     WebPage,
     css,
-    css_get,
-    css_getall,
     field,
-    jmespath_get,
-    jmespath_getall,
-    xpath_get,
+    jmespath,
+    xpath,
 )
 from web_poet._frostwork import _get_page
 from web_poet._selectors import _get_selectors_dict
@@ -52,14 +49,14 @@ def response():
 
 @attrs.define
 class Page(WebPage):
-    name = field(css_get("h1::text"))
-    images = field(css_getall("img::attr(src)"))
-    brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
-    missing = field(css_get(".missing::text"))
-    missing_all = field(css_getall(".missing::text"))
+    name = field(css("h1::text").get())
+    images = field(css("img::attr(src)").getall())
+    brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+    missing = field(css(".missing::text").get())
+    missing_all = field(css(".missing::text").getall())
 
-    _sku_a = css_get(".sku::text")
-    _sku_b = xpath_get("//meta[@name='sku']/@content")
+    _sku_a = css(".sku::text").get()
+    _sku_b = xpath("//meta[@name='sku']/@content").get()
 
     @field
     def sku(self) -> str | None:
@@ -124,7 +121,7 @@ def test_class_access() -> None:
 
 
 def test_repr() -> None:
-    assert repr(css_getall("img::attr(src)")) == "css_getall('img::attr(src)')"
+    assert repr(css("img::attr(src)").getall()) == "css('img::attr(src)').getall()"
 
 
 def test_xpath_function(response) -> None:
@@ -132,8 +129,8 @@ def test_xpath_function(response) -> None:
 
     @attrs.define
     class FunctionPage(WebPage):
-        name = field(xpath_get("normalize-space(//h1)"))
-        images = field(xpath_get("count(//img)"))
+        name = field(xpath("normalize-space(//h1)").get())
+        images = field(xpath("count(//img)").get())
 
     page = FunctionPage(response=response)
     assert page.name == "Foo"
@@ -147,10 +144,16 @@ def test_xpath_function(response) -> None:
 def test_jmespath() -> None:
     @attrs.define
     class JsonPage(WebPage):
-        name = field(jmespath_get("website.name"))
-        price = field(jmespath_get("price"))
-        tags = field(jmespath_getall("tags"))
-        missing = field(jmespath_get("missing"))
+        name = field(jmespath("website.name").get())
+        price = field(jmespath("price").get())
+        tags = field(jmespath("tags").getall())
+        missing = field(jmespath("missing").get())
+
+        _website = jmespath("website")
+
+        @field
+        def website_name(self) -> str | None:
+            return self._website.jmespath("name").get()
 
     response = HttpResponse(
         "http://example.com",
@@ -162,6 +165,7 @@ def test_jmespath() -> None:
         "price": 10,
         "tags": ["a", "b"],
         "missing": None,
+        "website_name": "homepage",
     }
 
 
@@ -204,10 +208,12 @@ def test_selector_declaration(response) -> None:
     class SelectorPage(WebPage):
         price = css(".price")
         missing = css(".missing")
+        brand = xpath("//meta[@itemprop='brand']")
 
     page = SelectorPage(response=response)
     assert page.price.css("::text").get() == "10.00"
     assert page.missing.css("::text").get() is None
+    assert page.brand.xpath("@content").get() == "Acme"
 
 
 def test_field_not_callable() -> None:
@@ -217,15 +223,15 @@ def test_field_not_callable() -> None:
 
 def test_field_expression() -> None:
     """An expression must be wrapped in a selector declaration."""
-    with pytest.raises(TypeError, match=re.escape("Use web_poet.css_get()")):
+    with pytest.raises(TypeError, match=re.escape("Use web_poet.css()")):
         field("h1::text")  # type: ignore[call-overload]
 
 
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):
-        name = field(css_get("h1::text"), out=[str.strip])
-        images = field(css_getall("img::attr(src)"), out=[len])
+        name = field(css("h1::text").get(), out=[str.strip])
+        images = field(css("img::attr(src)").getall(), out=[len])
 
     page = OutPage(response=response)
     assert page.name == "Foo"
@@ -235,7 +241,7 @@ def test_out(response) -> None:
 def test_processors(response) -> None:
     @attrs.define
     class ProcessorsPage(WebPage):
-        name = field(css_get("h1::text"))
+        name = field(css("h1::text").get())
 
         class Processors:
             name = [str.strip]
@@ -248,7 +254,7 @@ def test_meta() -> None:
 
     @attrs.define
     class MetaPage(WebPage):
-        name = field(css_get("h1::text"), meta={"expensive": False})
+        name = field(css("h1::text").get(), meta={"expensive": False})
 
     assert get_fields_dict(MetaPage)["name"].meta == {"expensive": False}
 
@@ -274,7 +280,7 @@ class TestInheritance:
     def test_add(self, response) -> None:
         @attrs.define
         class SubPage(Page, Returns[dict]):
-            price = field(css_get(".price::text"))
+            price = field(css(".price::text").get())
 
         assert _get_selectors_dict(SubPage)["price"].expression == ".price::text"
         assert SubPage(response=response).price == "10.00"
@@ -283,7 +289,7 @@ class TestInheritance:
     def test_override(self, response) -> None:
         @attrs.define
         class SubPage(Page):
-            name = field(css_get(".price::text"))
+            name = field(css(".price::text").get())
 
         assert SubPage(response=response).name == "10.00"
         assert Page(response=response).name == " Foo "
@@ -315,7 +321,7 @@ class TestInheritance:
 def test_selector_extractor() -> None:
     @attrs.define
     class Extractor(SelectorExtractor):
-        name = field(css_get("h1::text"), out=[str.strip])
+        name = field(css("h1::text").get(), out=[str.strip])
 
     sel = parsel.Selector(HTML)
     assert asyncio.run(Extractor(sel).to_item()) == {"name": "Foo"}
@@ -324,7 +330,7 @@ def test_selector_extractor() -> None:
 def test_browser_page() -> None:
     @attrs.define
     class Page(BrowserPage):
-        name = field(css_get("h1::text"), out=[str.strip])
+        name = field(css("h1::text").get(), out=[str.strip])
 
     response = BrowserResponse(url="http://example.com", html=HTML)
     assert asyncio.run(Page(response=response).to_item()) == {"name": "Foo"}
@@ -366,17 +372,17 @@ def test_single_pass_extraction(response) -> None:
 def test_invalid_expression() -> None:
     """An invalid expression fails on declaration."""
     with pytest.raises(SelectorSyntaxError):
-        css_get("::::")
+        css("::::")
     with pytest.raises(ExpressionError):
-        css_get("h1::txt")
+        css("h1::txt")
     with pytest.raises(XPathSyntaxError):
-        xpath_get("//h1[")
+        xpath("//h1[")
 
 
 def test_invalid_jmespath_expression() -> None:
     exceptions = pytest.importorskip("jmespath.exceptions")
     with pytest.raises(exceptions.ParseError):
-        jmespath_get("website.")
+        jmespath("website.")
 
 
 def test_extraction_error(response) -> None:
@@ -384,8 +390,8 @@ def test_extraction_error(response) -> None:
 
     @attrs.define
     class BrokenPage(WebPage):
-        name = field(css_get("h1::text"))
-        broken = field(xpath_get("//*[unregistered()]"))
+        name = field(css("h1::text").get())
+        broken = field(xpath("//*[unregistered()]").get())
 
     page = BrokenPage(response=response)
     assert page.name == " Foo "
@@ -399,7 +405,7 @@ def test_reused_declaration(response) -> None:
 
     @attrs.define
     class ReusePage(WebPage):
-        _raw_price = css_get(".price::text")
+        _raw_price = css(".price::text").get()
         price = field(_raw_price, out=[float])
 
         @field
@@ -414,7 +420,7 @@ def test_reused_declaration(response) -> None:
 def test_shared_declaration(response) -> None:
     """The same declaration object can be used by different classes, e.g. as a
     module-level constant."""
-    shared = css_get(".sku::text")
+    shared = css(".sku::text").get()
 
     @attrs.define
     class PageA(WebPage):
@@ -433,8 +439,8 @@ def test_query_method_name(response) -> None:
 
     @attrs.define
     class QueryPage(WebPage):
-        css = field(css_get("h1::text"))  # type: ignore[assignment]
-        xpath = field(xpath_get("//h1/text()"))  # type: ignore[assignment]
+        css = field(css("h1::text").get())  # type: ignore[assignment]
+        xpath = field(xpath("//h1/text()").get())  # type: ignore[assignment]
 
     page = QueryPage(response=response)
     assert page.css == " Foo "
@@ -446,10 +452,10 @@ def test_late_declaration(response) -> None:
 
     @attrs.define
     class LatePage(WebPage):
-        name = field(css_get("h1::text"))
+        name = field(css("h1::text").get())
 
     assert LatePage(response=response).name == " Foo "
-    LatePage.late = css_get(".sku::text")  # type: ignore[attr-defined]
+    LatePage.late = css(".sku::text").get()  # type: ignore[attr-defined]
     with pytest.raises(ValueError, match="must be set as class attributes"):
         LatePage(response=response).late  # type: ignore[attr-defined]
 
@@ -457,7 +463,7 @@ def test_late_declaration(response) -> None:
 def test_no_selector() -> None:
     @attrs.define
     class NoSelectorPage(ItemPage):
-        name = field(css_get("h1::text"))
+        name = field(css("h1::text").get())
 
     with pytest.raises(TypeError, match="provides no parsel selector"):
         NoSelectorPage().name

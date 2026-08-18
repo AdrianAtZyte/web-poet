@@ -5,28 +5,25 @@ from web_poet import (
     HttpResponse,
     WebPage,
     css,
-    css_get,
-    css_getall,
     field,
-    jmespath_get,
-    jmespath_getall,
-    xpath_get,
+    jmespath,
+    xpath,
 )
 
 
 @attrs.define
 class Page(WebPage):
-    name = field(css_get("h1::text"))
-    price = field(css_get(".price::text"))
-    brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
-    images = field(css_getall("img::attr(src)"))
-    length = field(css_get("h1::text"), out=[len])
+    name = field(css("h1::text").get())
+    price = field(css(".price::text").get())
+    brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+    images = field(css("img::attr(src)").getall())
+    length = field(css("h1::text").get(), out=[len])
 
-    json = field(jmespath_get("price"))
-    jsons = field(jmespath_getall("tags"))
+    json = field(jmespath("price").get())
+    jsons = field(jmespath("tags").getall())
 
-    helper = css_get(".sku::text")
-    helpers = css_getall(".sku::text")
+    helper = css(".sku::text").get()
+    helpers = css(".sku::text").getall()
     helper_selector = css(".sku::text")
 
 

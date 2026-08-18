@@ -35,27 +35,25 @@ For example:
 Declarative selectors
 =====================
 
-When a field is exactly one selector, you can declare that selector instead of
-writing a method for it:
+When a field is exactly one selector, you can declare that selector with
+:func:`~web_poet.css`, :func:`~web_poet.xpath` or :func:`~web_poet.jmespath`
+instead of writing a method for it:
 
 .. code-block:: python
 
     import attrs
-    from web_poet import WebPage, css_get, css_getall, field, xpath_get
+    from web_poet import WebPage, css, field, xpath
     from zyte_parsers import extract_price
 
 
     @attrs.define
     class MyPage(WebPage):
-        price = field(css_get(".price::text"), out=[extract_price])
-        brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
-        images = field(css_getall("img::attr(src)"))
+        price = field(css(".price::text").get(), out=[extract_price])
+        brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+        images = field(css("img::attr(src)").getall())
 
-:func:`~web_poet.jmespath_get` and :func:`~web_poet.jmespath_getall`
-declarations are also supported, and their values are the matching JSON values.
-
-.. note:: :ref:`Field processors <field-processors>` must handle ``None``, as
-    :func:`~zyte_parsers.extract_price` above does.
+:ref:`Field processors <field-processors>` must handle ``None``, as
+:func:`~zyte_parsers.extract_price` above does.
 
 Combining selectors
 -------------------
@@ -67,21 +65,21 @@ value. Use that to combine several declarations into a single field:
 .. code-block:: python
 
     import attrs
-    from web_poet import WebPage, css_get, field, xpath_get
+    from web_poet import WebPage, css, field, xpath
 
 
     @attrs.define
     class MyPage(WebPage):
-        _sku_meta = xpath_get("//meta[@itemprop='sku']/@content")
-        _sku_text = css_get(".sku::text")
+        _sku_meta = xpath("//meta[@itemprop='sku']/@content").get()
+        _sku_text = css(".sku::text").get()
 
         @field
         def sku(self) -> str | None:
             return self._sku_meta or self._sku_text
 
-:func:`~web_poet.css`, :func:`~web_poet.xpath` and :func:`~web_poet.jmespath`
-declare a :class:`~parsel.selector.SelectorList` instead of an extracted value,
-so that you can query it further, e.g. to read JSON embedded in a web page:
+A declaration without ``get()`` or ``getall()`` is a
+:class:`~parsel.selector.SelectorList`, which you can query further, e.g. to
+read JSON embedded in a web page:
 
 .. code-block:: python
 
@@ -105,10 +103,17 @@ Install frostwork_ to have it extract selector declarations instead of parsel.
 .. _frostwork: https://github.com/shaneaevans/frostwork
 
 frostwork scans the raw response once for all the declarations of a page object
-that it can extract, which is faster than one parsel query per declaration.
-parsel still extracts the rest: :class:`~parsel.selector.SelectorList` and
-JMESPath declarations, and expressions outside the `frostwork selector
-contract`_.
+that it can extract: CSS and XPath declarations with ``get()`` or ``getall()``
+whose expression is within the `frostwork selector contract`_. parsel extracts
+the rest, one query per declaration, after building a selector for the whole
+response.
+
+The savings grow with the size of the response and with the number of
+declarations that frostwork extracts: expect extraction to be a few times
+faster for a small response, and an order of magnitude faster or more for a
+large one. Every declaration that parsel extracts instead, and every field that
+uses a query method, requires a parsel selector for the whole response, which
+reduces the savings, down to none for a page object that barely uses frostwork.
 
 .. _frostwork selector contract: https://github.com/shaneaevans/frostwork/blob/main/docs/COMPATIBILITY.md
 
@@ -669,7 +674,7 @@ provides ``css()`` and ``xpath()``:
 .. code-block:: python
 
     class VariantExtractor(SelectorExtractor):
-        color = field(css_get(".name::text"))
+        color = field(css(".name::text").get())
 
 You can also pass other data in addition to, or instead of, selectors, such as
 dictionaries with some data:

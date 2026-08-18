@@ -13,12 +13,9 @@ from web_poet import (
     SelectorExtractor,
     WebPage,
     css,
-    css_get,
-    css_getall,
     field,
-    jmespath_get,
-    xpath_get,
-    xpath_getall,
+    jmespath,
+    xpath,
 )
 from web_poet import mixins as _mixins
 from web_poet._frostwork import _get_page
@@ -54,17 +51,17 @@ def parsel_only(monkeypatch):
 
 @attrs.define
 class Page(WebPage):
-    name = field(css_get("h1::text"))
-    images = field(css_getall("img::attr(src)"))
-    brand = field(xpath_get("//meta[@itemprop='brand']/@content"))
-    sources = field(xpath_getall("//img/@src"))
-    missing = field(css_get(".missing::text"))
+    name = field(css("h1::text").get())
+    images = field(css("img::attr(src)").getall())
+    brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+    sources = field(xpath("//img/@src").getall())
+    missing = field(css(".missing::text").get())
 
     # Neither a selector list nor JMESPath is something that frostwork can
     # extract, and :contains() is beyond its selector support.
     price = field(css(".price::text"), out=[lambda value: value.get()])
-    sku = field(jmespath_get("sku"))
-    description = field(css_get(".desc:contains('description')::text"))
+    sku = field(jmespath("sku").get())
+    description = field(css(".desc:contains('description')::text").get())
 
 
 EXPECTED = {
@@ -107,7 +104,7 @@ def test_browser_page() -> None:
 
     @attrs.define
     class BrowserPageSubclass(BrowserPage):
-        name = field(css_get("h1::text"))
+        name = field(css("h1::text").get())
 
     response = BrowserResponse(url="http://example.com", html=HTML)
     assert asyncio.run(BrowserPageSubclass(response=response).to_item()) == {
@@ -121,7 +118,7 @@ def test_selector_extractor() -> None:
 
     @attrs.define
     class Extractor(SelectorExtractor):
-        name = field(css_get("h1::text"))
+        name = field(css("h1::text").get())
 
     extractor = Extractor(parsel.Selector(HTML))
     assert asyncio.run(extractor.to_item()) == {"name": " Foo "}
