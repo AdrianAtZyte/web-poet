@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 import parsel
 from w3lib.html import get_base_url
 
+from web_poet._frostwork import _extract as _frostwork_extract
 from web_poet._selectors import _get_selectors_dict
 from web_poet.utils import cached_method
 
@@ -42,6 +43,12 @@ class SelectorShortcutsMixin:
             )
         return self.selector.jmespath(query, **kwargs)  # type: ignore[attr-defined]
 
+    def _selector_document(self) -> tuple[bytes | str, str | None] | None:
+        """Return the raw document of this object and its encoding, for
+        extraction backends that scan it directly instead of using
+        ``self.selector``, or ``None`` if there is no such document."""
+        return None
+
     @cached_method
     def _selector_value_cache(self) -> dict[str, Any]:
         return {}
@@ -66,9 +73,14 @@ class SelectorShortcutsMixin:
         extracts every declaration of the object in a single pass, as reported
         by ``_get_selectors_dict()``, only runs once.
 
+        frostwork extracts every declaration that it supports, and parsel the
+        rest.
+
         Override this to use an alternative extraction backend."""
-        values = {}
+        values = _frostwork_extract(self, declarations)
         for name, declaration in declarations.items():
+            if name in values:
+                continue
             # Going through the mixin, and not through self, keeps a field
             # named css, xpath or jmespath from shadowing the query method.
             query = getattr(SelectorShortcutsMixin, declaration.syntax)
@@ -155,6 +167,15 @@ class ResponseShortcutsMixin(Generic[ResponseT], SelectableMixin, UrlShortcutsMi
 
     def _selector_input(self) -> str:
         return self.html
+
+    def _selector_document(self) -> tuple[bytes | str, str | None]:
+        response: Any = self.response
+        try:
+            body = response.body
+        except AttributeError:
+            # A browser response is HTML that has already been decoded.
+            return self.html, None
+        return body, response.encoding
 
     @property
     def base_url(self) -> str:

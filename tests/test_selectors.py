@@ -27,6 +27,7 @@ from web_poet import (
     jmespath_getall,
     xpath_get,
 )
+from web_poet._frostwork import _get_page
 from web_poet._selectors import _get_selectors_dict
 from web_poet.testing import Fixture
 
@@ -331,10 +332,18 @@ def test_browser_page() -> None:
 
 def test_extraction_is_lazy(response) -> None:
     """Reading a declaration extracts that declaration alone, and caches its
-    value."""
+    value.
+
+    frostwork extracts every declaration that it supports in the same pass, so
+    only parsel extraction is lazy."""
     page = Page(response=response)
     assert page.name == " Foo "
-    assert page._selector_value_cache() == {"name": " Foo "}
+    cache = page._selector_value_cache()
+    assert cache["name"] == " Foo "
+    if _get_page(Page) is None:
+        assert set(cache) == {"name"}
+    else:
+        assert set(cache) == set(_get_selectors_dict(Page))
 
 
 def test_single_pass_extraction(response) -> None:

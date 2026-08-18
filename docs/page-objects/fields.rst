@@ -97,6 +97,21 @@ so that you can query it further, e.g. to read JSON embedded in a web page:
         def price(self) -> str | None:
             return self._ld.jmespath("offers.price").get()
 
+Extracting with frostwork
+-------------------------
+
+Install frostwork_ to have it extract selector declarations instead of parsel.
+
+.. _frostwork: https://github.com/shaneaevans/frostwork
+
+frostwork scans the raw response once for all the declarations of a page object
+that it can extract, which is faster than one parsel query per declaration.
+parsel still extracts the rest: :class:`~parsel.selector.SelectorList` and
+JMESPath declarations, and expressions outside the `frostwork selector
+contract`_.
+
+.. _frostwork selector contract: https://github.com/shaneaevans/frostwork/blob/main/docs/COMPATIBILITY.md
+
 .. _fields-sync-async:
 
 Synchronous and asynchronous fields

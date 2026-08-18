@@ -87,6 +87,10 @@ ignore_missing_imports = false
 implicit_reexport = false
 
 [[tool.mypy.overrides]]
+module = "frostwork"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "tests.*"
 allow_untyped_defs = true
 allow_incomplete_defs = true

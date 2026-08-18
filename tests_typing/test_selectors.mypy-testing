@@ -33,25 +33,25 @@ class Page(WebPage):
 @pytest.mark.mypy_testing
 def test_field_str() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.name)  # R: Union[builtins.str, None]
+    reveal_type(page.name)  # R: str | None
 
 
 @pytest.mark.mypy_testing
 def test_field_css() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.price)  # R: Union[builtins.str, None]
+    reveal_type(page.price)  # R: str | None
 
 
 @pytest.mark.mypy_testing
 def test_field_xpath() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.brand)  # R: Union[builtins.str, None]
+    reveal_type(page.brand)  # R: str | None
 
 
 @pytest.mark.mypy_testing
 def test_field_all() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.images)  # R: builtins.list[builtins.str]
+    reveal_type(page.images)  # R: list[str]
 
 
 @pytest.mark.mypy_testing
@@ -63,19 +63,19 @@ def test_field_jmespath() -> None:
 @pytest.mark.mypy_testing
 def test_field_jmespath_all() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.jsons)  # R: builtins.list[Any]
+    reveal_type(page.jsons)  # R: list[Any]
 
 
 @pytest.mark.mypy_testing
 def test_declaration() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.helper)  # R: Union[builtins.str, None]
+    reveal_type(page.helper)  # R: str | None
 
 
 @pytest.mark.mypy_testing
 def test_declaration_all() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.helpers)  # R: builtins.list[builtins.str]
+    reveal_type(page.helpers)  # R: list[str]
 
 
 @pytest.mark.mypy_testing
@@ -88,4 +88,4 @@ def test_declaration_selector() -> None:
 @pytest.mark.xfail(reason="mypy does not infer field(out=...) transformed return type")
 def test_field_out() -> None:
     page = Page(response=HttpResponse("http://example.com", b""))
-    reveal_type(page.length)  # R: builtins.int
+    reveal_type(page.length)  # R: int
