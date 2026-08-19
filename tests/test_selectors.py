@@ -342,14 +342,15 @@ def test_extraction_is_lazy(response) -> None:
 
     frostwork extracts every declaration that it supports in the same pass, so
     only parsel extraction is lazy."""
+    declarations = _get_selectors_dict(Page)
     page = Page(response=response)
     assert page.name == " Foo "
     cache = page._selector_value_cache()
-    assert cache["name"] == " Foo "
+    assert cache[declarations["name"]] == " Foo "
     if _get_page(Page) is None:
-        assert set(cache) == {"name"}
+        assert set(cache) == {declarations["name"]}
     else:
-        assert set(cache) == set(_get_selectors_dict(Page))
+        assert set(cache) == set(declarations.values())
 
 
 def test_single_pass_extraction(response) -> None:
@@ -362,11 +363,11 @@ def test_single_pass_extraction(response) -> None:
     class SinglePassPage(Page):
         def _extract_selectors(self, declarations):
             calls.append(set(declarations))
-            return super()._extract_selectors(_get_selectors_dict(self))
+            return super()._extract_selectors(_get_selectors_dict(self).values())
 
     page = SinglePassPage(response=response)
     assert asyncio.run(page.to_item()) == asyncio.run(Page(response=response).to_item())
-    assert calls == [{"name"}]
+    assert calls == [{_get_selectors_dict(Page)["name"]}]
 
 
 def test_invalid_expression() -> None:
@@ -401,7 +402,9 @@ def test_extraction_error(response) -> None:
 
 def test_reused_declaration(response) -> None:
     """A declaration can be reused, e.g. by a field that processes its value
-    and by a field that composes something else out of the raw value."""
+    and by a field that composes something else out of the raw value.
+
+    It is extracted once, no matter how many attributes use it."""
 
     @attrs.define
     class ReusePage(WebPage):
@@ -415,6 +418,7 @@ def test_reused_declaration(response) -> None:
     page = ReusePage(response=response)
     assert page.price == 10.0
     assert page.price_label == "only 10.00!"
+    assert len(page._selector_value_cache()) == 1
 
 
 def test_shared_declaration(response) -> None:
@@ -445,19 +449,6 @@ def test_query_method_name(response) -> None:
     page = QueryPage(response=response)
     assert page.css == " Foo "
     assert page.xpath == " Foo "
-
-
-def test_late_declaration(response) -> None:
-    """Declarations set after the class definition are not supported."""
-
-    @attrs.define
-    class LatePage(WebPage):
-        name = field(css("h1::text").get())
-
-    assert LatePage(response=response).name == " Foo "
-    LatePage.late = css(".sku::text").get()  # type: ignore[attr-defined]
-    with pytest.raises(ValueError, match="must be set as class attributes"):
-        LatePage(response=response).late  # type: ignore[attr-defined]
 
 
 def test_no_selector() -> None:

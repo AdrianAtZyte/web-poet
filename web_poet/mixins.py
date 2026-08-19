@@ -8,10 +8,11 @@ import parsel
 from w3lib.html import get_base_url
 
 from web_poet._frostwork import _extract as _frostwork_extract
-from web_poet._selectors import _get_selectors_dict
 from web_poet.utils import cached_method
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from web_poet._selectors import _SelectorDeclaration
     from web_poet.page_inputs.url import RequestUrl, ResponseUrl
 
@@ -50,23 +51,21 @@ class SelectorShortcutsMixin:
         return None
 
     @cached_method
-    def _selector_value_cache(self) -> dict[str, Any]:
+    def _selector_value_cache(self) -> dict[_SelectorDeclaration, Any]:
         return {}
 
-    def _selector_value(self, name: str) -> Any:
-        """Return the value of the selector declaration of this object named
-        *name*, extracting it on the first call."""
+    def _selector_value(self, declaration: _SelectorDeclaration) -> Any:
+        """Return the value of *declaration* for this object, extracting it on
+        the first call."""
         values = self._selector_value_cache()
-        if name not in values:
-            declaration = _get_selectors_dict(self)[name]
-            values.update(self._extract_selectors({name: declaration}))
-        return values[name]
+        if declaration not in values:
+            values.update(self._extract_selectors([declaration]))
+        return values[declaration]
 
     def _extract_selectors(
-        self, declarations: dict[str, _SelectorDeclaration]
-    ) -> dict[str, Any]:
-        """Return a value for every declaration in *declarations*, a mapping of
-        attribute name to declaration object.
+        self, declarations: Collection[_SelectorDeclaration]
+    ) -> dict[_SelectorDeclaration, Any]:
+        """Return a value for every declaration in *declarations*.
 
         Values for declarations beyond those requested may be included in the
         returned mapping; they are cached and reused. So an implementation that
@@ -78,8 +77,8 @@ class SelectorShortcutsMixin:
 
         Override this to use an alternative extraction backend."""
         values = _frostwork_extract(self, declarations)
-        for name, declaration in declarations.items():
-            if name in values:
+        for declaration in declarations:
+            if declaration in values:
                 continue
             # Going through the mixin, and not through self, keeps a field
             # named css, xpath or jmespath from shadowing the query method.
@@ -87,7 +86,7 @@ class SelectorShortcutsMixin:
             selector_list = query(self, declaration.expression)
             # Modes other than selector are named after the parsel selector
             # list method that implements them.
-            values[name] = (
+            values[declaration] = (
                 selector_list
                 if declaration.mode == "selector"
                 else getattr(selector_list, declaration.mode)()

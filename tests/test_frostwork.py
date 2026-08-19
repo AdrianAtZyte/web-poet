@@ -19,6 +19,7 @@ from web_poet import (
 )
 from web_poet import mixins as _mixins
 from web_poet._frostwork import _get_page
+from web_poet._selectors import _get_selectors_dict
 
 pytest.importorskip("frostwork")
 
@@ -46,7 +47,9 @@ def response():
 @pytest.fixture
 def parsel_only(monkeypatch):
     """Disable frostwork, so that parsel extracts every declaration."""
-    monkeypatch.setattr(_mixins, "_frostwork_extract", lambda instance, names: {})
+    monkeypatch.setattr(
+        _mixins, "_frostwork_extract", lambda instance, declarations: {}
+    )
 
 
 @attrs.define
@@ -79,7 +82,7 @@ EXPECTED = {
 def test_extractable_declarations() -> None:
     page = _get_page(Page)
     assert page is not None
-    assert page[1] == {"name", "images", "brand", "sources", "missing"}
+    assert set(page[1].values()) == {"name", "images", "brand", "sources", "missing"}
 
 
 def test_values(response) -> None:
@@ -95,7 +98,21 @@ def test_fallback_is_lazy(response) -> None:
     """A declaration that frostwork cannot extract does not trigger a scan."""
     page = Page(response=response)
     assert page.sku is None
-    assert set(page._selector_value_cache()) == {"sku"}
+    assert set(page._selector_value_cache()) == {_get_selectors_dict(Page)["sku"]}
+
+
+def test_reused_declaration(response) -> None:
+    """A declaration used by more than one attribute is extracted once."""
+
+    @attrs.define
+    class ReusePage(WebPage):
+        _raw_price = css(".price::text").get()
+        price = field(_raw_price, out=[float])
+
+    result = _get_page(ReusePage)
+    assert result is not None
+    assert set(result[1].values()) == {"_raw_price"}
+    assert ReusePage(response=response).price == 10.0
 
 
 def test_browser_page() -> None:

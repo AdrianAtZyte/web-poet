@@ -28,37 +28,47 @@ _SYNTAXES = {"css", "xpath"}
 
 def _build_page(
     declarations: dict[str, _SelectorDeclaration],
-) -> tuple[Page, frozenset[str]] | None:
+) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
     """Return a frostwork page for the declarations that frostwork can extract,
-    along with their names, or ``None`` if there are none."""
+    mapped to the name that they have on it, or ``None`` if there are none.
+
+    A declaration used by more than one attribute is extracted once, under the
+    first of those attribute names."""
     if Page is None:
         return None
-    candidates = {
-        name: declaration
-        for name, declaration in declarations.items()
-        if declaration.mode in _METHODS and declaration.syntax in _SYNTAXES
-    }
+    candidates: dict[_SelectorDeclaration, str] = {}
+    for name, declaration in declarations.items():
+        if (
+            declaration.mode in _METHODS
+            and declaration.syntax in _SYNTAXES
+            and declaration not in candidates
+        ):
+            candidates[declaration] = name
     if not candidates:
         return None
     report = check(
-        [(name, declaration.expression) for name, declaration in candidates.items()]
+        [(name, declaration.expression) for declaration, name in candidates.items()]
     )
     if report.over_budget:
         # The budget covers a whole schema at once, and leaving out enough
         # declarations to fit could leave out any of them, so parsel extracts
         # them all instead.
         return None
-    names = frozenset(field.name for field in report.fields if field.supported)
+    supported = frozenset(field.name for field in report.fields if field.supported)
+    names = {
+        declaration: name
+        for declaration, name in candidates.items()
+        if name in supported
+    }
     if not names:
         return None
     page = Page()
-    for name, declaration in candidates.items():
-        if name in names:
-            getattr(page, _METHODS[declaration.mode])(name, declaration.expression)
+    for declaration, name in names.items():
+        getattr(page, _METHODS[declaration.mode])(name, declaration.expression)
     return page, names
 
 
-def _get_page(cls: type) -> tuple[Page, frozenset[str]] | None:
+def _get_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
     """Return the frostwork page of *cls*, building it on the first call.
 
     Like the selector declarations that it is built from, it is derived and
@@ -72,20 +82,27 @@ def _get_page(cls: type) -> tuple[Page, frozenset[str]] | None:
         return result
 
 
-def _extract(instance: Any, names: Collection[str]) -> dict[str, Any]:
+def _extract(
+    instance: Any, declarations: Collection[_SelectorDeclaration]
+) -> dict[_SelectorDeclaration, Any]:
     """Return the value of every declaration of *instance* that frostwork can
-    extract, provided that at least one of *names* is among them.
+    extract, provided that at least one of *declarations* is among them.
 
     Return an empty mapping otherwise, including when frostwork is not
     installed or *instance* provides no raw document to scan."""
     result = _get_page(type(instance))
     if result is None:
         return {}
-    page, extractable = result
-    if extractable.isdisjoint(names):
+    page, names = result
+    if names.keys().isdisjoint(declarations):
         return {}
     document = instance._selector_document()
     if document is None:
         return {}
     html, encoding = document
-    return page.extract(html, encoding).to_dict()
+    values = page.extract(html, encoding).to_dict()
+    return {
+        declaration: values[name]
+        for declaration, name in names.items()
+        if name in values
+    }

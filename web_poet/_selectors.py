@@ -135,22 +135,7 @@ def _declaration_value(instance: Any, declaration: _SelectorDeclaration) -> Any:
             f"it provides no parsel selector. Inherit from a class that does, "
             f"e.g. web_poet.WebPage or web_poet.SelectorExtractor."
         ) from None
-    return get_value(_declaration_name(instance, declaration))
-
-
-def _declaration_name(instance: Any, declaration: _SelectorDeclaration) -> str:
-    """Return the attribute name that *declaration* has on *instance*.
-
-    A declaration object can be shared by any number of attributes and classes,
-    so its name depends on where it is looked up."""
-    for name, candidate in _get_selectors_dict(instance).items():
-        if candidate is declaration:
-            return name
-    raise ValueError(
-        f"{declaration!r} is not among the selector declarations of "
-        f"{type(instance).__name__}. Selector declarations must be set as class "
-        f"attributes in the class definition."
-    )
+    return get_value(declaration)
 
 
 def _get_declaration(value: Any) -> _SelectorDeclaration | None:
