@@ -85,6 +85,33 @@ def test_extractable_declarations() -> None:
     assert set(page[1].values()) == {"name", "images", "brand", "sources", "missing"}
 
 
+def test_unsupported_declarations(response) -> None:
+    """A page with no declaration that frostwork supports is left to parsel."""
+
+    @attrs.define
+    class UnsupportedPage(WebPage):
+        name = field(css(":root h1::text").get())
+
+    assert _get_page(UnsupportedPage) is None
+    assert asyncio.run(UnsupportedPage(response=response).to_item()) == {
+        "name": " Foo "
+    }
+
+
+def test_over_budget(response) -> None:
+    """A page whose declarations do not fit the frostwork budget is left to
+    parsel."""
+
+    @attrs.define
+    class OverBudgetPage(WebPage):
+        # Every comma-separated selector counts towards the budget, which is
+        # 128 selectors at the time of writing.
+        name = field(css(", ".join(["h1::text"] * 129)).get())
+
+    assert _get_page(OverBudgetPage) is None
+    assert asyncio.run(OverBudgetPage(response=response).to_item()) == {"name": " Foo "}
+
+
 def test_values(response) -> None:
     assert asyncio.run(Page(response=response).to_item()) == EXPECTED
 
