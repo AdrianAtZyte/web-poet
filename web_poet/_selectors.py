@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, overload
 
 import parsel
 from lxml.etree import XPath  # type: ignore[import-untyped]
-from parsel.csstranslator import HTMLTranslator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,11 +25,6 @@ _SelectorSyntax = Literal["css", "xpath", "jmespath"]
 # matches.
 _SelectorMode = Literal["selector", "get", "getall"]
 
-# HTML is the CSS dialect with the largest set of valid expressions, so it is
-# also the one that never rejects an expression that some parsel selector could
-# have translated.
-_css_translator = HTMLTranslator()
-
 _JMESPATH_ERROR = "Please install parsel >= 1.8.1 to get jmespath support"
 
 
@@ -42,7 +36,10 @@ def _validate(expression: str, syntax: _SelectorSyntax) -> None:
     """Raise the underlying syntax error of *syntax* if *expression* cannot be
     parsed."""
     if syntax == "css":
-        _css_translator.css_to_xpath(expression)
+        # parsel.css2xpath() translates through its own HTMLTranslator, the
+        # CSS dialect with the largest set of valid expressions, so it never
+        # rejects an expression that some parsel selector could translate.
+        parsel.css2xpath(expression)
     elif syntax == "xpath":
         XPath(expression)
     else:

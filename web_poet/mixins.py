@@ -68,10 +68,8 @@ class SelectorShortcutsMixin:
         return values[declaration]
 
     def _parsel_value(self, declaration: _SelectorDeclaration) -> Any:
-        # Going through the mixin, and not through self, keeps a field named
-        # css, xpath or jmespath from shadowing the query method.
-        query = getattr(SelectorShortcutsMixin, declaration.syntax)
-        selector_list = query(self, declaration.expression)
+        query = getattr(self.selector, declaration.syntax)  # type: ignore[attr-defined]
+        selector_list = query(declaration.expression)
         # Modes other than selector are named after the parsel selector list
         # method that implements them.
         if declaration.mode == "selector":
