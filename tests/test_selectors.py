@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from pathlib import Path
 
 import attrs
 import parsel
@@ -9,6 +10,7 @@ import pytest
 from cssselect.parser import SelectorSyntaxError
 from cssselect.xpath import ExpressionError
 from lxml.etree import XPathSyntaxError  # type: ignore[import-untyped]
+from packaging.version import Version
 
 from web_poet import (
     BrowserPage,
@@ -25,7 +27,6 @@ from web_poet import (
     jmespath,
     xpath,
 )
-from web_poet._frostwork import _get_page
 from web_poet._selectors import _get_selectors_dict
 from web_poet.testing import Fixture
 
@@ -119,6 +120,28 @@ def test_get_selectors_dict_instance(response) -> None:
 def test_class_access() -> None:
     """Accessing a declaration on the class returns the declaration."""
     assert _get_selectors_dict(Page)["_sku_a"] is Page._sku_a
+
+
+def test_equality() -> None:
+    """Declarations of the same query are interchangeable."""
+    assert css("h1::text").get() == css("h1::text").get()
+    assert css("h1::text").get() != css("h1::text").getall()
+    assert css("h1::text").get() != css("h2::text").get()
+    assert css("h1").get() != xpath("h1").get()
+    assert css("h1::text") != "h1::text"
+
+
+def test_equal_declarations(response) -> None:
+    """Equal declarations of different attributes are extracted once."""
+
+    @attrs.define
+    class TwinPage(WebPage):
+        a = field(css(".price::text").get())
+        b = field(css(".price::text").get())
+
+    page = TwinPage(response=response)
+    assert page.a == page.b == "10.00"
+    assert len(page._selector_value_cache()) == 1
 
 
 def test_repr() -> None:
@@ -248,12 +271,6 @@ def test_field_not_callable() -> None:
         field(1)  # type: ignore[call-overload]
 
 
-def test_field_expression() -> None:
-    """An expression must be wrapped in a selector declaration."""
-    with pytest.raises(TypeError, match=re.escape("Use web_poet.css()")):
-        field("h1::text")  # type: ignore[call-overload]
-
-
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):
@@ -363,21 +380,13 @@ def test_browser_page() -> None:
     assert asyncio.run(Page(response=response).to_item()) == {"name": "Foo"}
 
 
-def test_extraction_is_lazy(response) -> None:
-    """Reading a declaration extracts that declaration alone, and caches its
-    value.
-
-    frostwork extracts every declaration that it supports in the same pass, so
-    only parsel extraction is lazy."""
+def test_extraction_is_lazy(response, parsel_only) -> None:
+    """Parsel extracts the read declaration alone, and caches its value."""
     declarations = _get_selectors_dict(Page)
     page = Page(response=response)
     assert page.name == " Foo "
     cache = page._selector_value_cache()
-    assert cache[declarations["name"]] == " Foo "
-    if _get_page(Page) is None:
-        assert set(cache) == {declarations["name"]}
-    else:
-        assert set(cache) == set(declarations.values())
+    assert cache == {declarations["name"]: " Foo "}
 
 
 def test_single_pass_extraction(response) -> None:
@@ -502,3 +511,24 @@ def test_fixture(response, tmp_path) -> None:
     fixture.assert_field_correct("name", Page)
     fixture.assert_no_extra_fields(Page)
     fixture.assert_no_toitem_exceptions(Page)
+
+
+def test_documented_benchmark() -> None:
+    """The measurement in the documentation is that of a frostwork version no
+    older than the minimum supported one.
+
+    Refresh it with ``python -m benchmarks.frostwork_speedup --write``."""
+    root = Path(__file__).parent.parent
+    minimum = re.search(
+        r'"frostwork\s*>=\s*([^",]+)"', (root / "pyproject.toml").read_text()
+    )
+    if minimum is None:
+        pytest.skip("frostwork is not a declared dependency yet")
+    documented = re.search(
+        r"Measured with frostwork (\S+),",
+        (root / "docs" / "page-objects" / "fields.rst").read_text(),
+    )
+    assert documented is not None
+    assert Version(documented[1]) >= Version(minimum[1].strip()), (
+        "Refresh the measurement: python -m benchmarks.frostwork_speedup --write"
+    )

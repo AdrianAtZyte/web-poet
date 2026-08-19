@@ -237,13 +237,6 @@ def field(
     functions applied to the value of the field before returning it.
     """
 
-    if isinstance(method, str):
-        raise TypeError(
-            f"Expected a method or a selector declaration, got the string "
-            f"{method!r}. Use web_poet.css(), web_poet.xpath() or "
-            f"web_poet.jmespath() to declare a selector."
-        )
-
     if isinstance(method, _SelectorDeclaration):
         # field(css(...).get()) syntax
         declaration = method

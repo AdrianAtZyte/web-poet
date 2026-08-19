@@ -32,8 +32,8 @@ def _build_page(
     """Return a frostwork page for the declarations that frostwork can extract,
     mapped to the name that they have on it, or ``None`` if there are none.
 
-    A declaration used by more than one attribute is extracted once, under the
-    first of those attribute names."""
+    Declarations that are equal are extracted once, under the first attribute
+    name that uses one."""
     if Page is None:
         return None
     candidates: dict[_SelectorDeclaration, str] = {}

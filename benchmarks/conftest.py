@@ -1,30 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import gzip
 from collections.abc import Callable, Iterator
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from web_poet import HttpResponse, ItemPage
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-#: Every fixture is served as a real response of its website would be, charset
-#: included, so that encoding detection is not part of what is measured.
-HEADERS = {"Content-Type": "text/html; charset=utf-8"}
-
-URLS = {
-    "product": "https://www.ecommerce.example/dp/B0BENCH001",
-    "article": "https://www.news.example/news/articles/b3nchmarkid0",
-    "job": "https://www.jobs.example/jobs/view/9000000001",
-    "minimal": "https://www.example.com/",
-}
-
-MINIMAL_BODY = b"""<html><head><title>Alder Vale</title></head>
-<body><h1>Copper Ridge</h1><a href="/aspen">Aspen</a></body></html>"""
+from benchmarks.documents import build_page, read_bodies
+from web_poet import ItemPage
 
 PageBuilder = Callable[[type[ItemPage], str], Any]
 
@@ -40,17 +23,7 @@ def loop() -> Iterator[asyncio.AbstractEventLoop]:
 
 @pytest.fixture(scope="session")
 def bodies() -> dict[str, bytes]:
-    bodies = {
-        name: gzip.decompress((FIXTURES / f"{name}.html.gz").read_bytes())
-        for name in URLS
-        if name != "minimal"
-    }
-    return bodies | {"minimal": MINIMAL_BODY}
-
-
-def _build(page_cls: type[ItemPage], name: str, bodies: dict[str, bytes]) -> Any:
-    response = HttpResponse(URLS[name], body=bodies[name], headers=HEADERS)
-    return page_cls(response=response)  # type: ignore[call-arg]
+    return read_bodies()
 
 
 @pytest.fixture(scope="session")
@@ -60,7 +33,7 @@ def warm_pages(bodies: dict[str, bytes]) -> PageBuilder:
     def warm_page(page_cls: type[ItemPage], name: str) -> Any:
         key = (page_cls, name)
         if key not in pages:
-            page = _build(page_cls, name, bodies)
+            page = build_page(page_cls, name, bodies)
             page.selector
             pages[key] = page
         return pages[key]
@@ -86,4 +59,4 @@ def page(
     one up."""
     if request.param == "warm":
         return warm_pages
-    return lambda page_cls, name: _build(page_cls, name, bodies)
+    return lambda page_cls, name: build_page(page_cls, name, bodies)

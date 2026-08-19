@@ -57,6 +57,21 @@ class _SelectorDeclaration(Generic[_ValueT]):
         suffix = "" if self.mode == "selector" else f".{self.mode}()"
         return f"{self.syntax}({self.expression!r}){suffix}"
 
+    @property
+    def _key(self) -> tuple[str, _SelectorSyntax, _SelectorMode]:
+        return self.expression, self.syntax, self.mode
+
+    # Declarations are dictionary keys, both to map them to their value on an
+    # object and to extract each of them once, and two declarations of the same
+    # query always have the same value.
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _SelectorDeclaration):
+            return NotImplemented
+        return self._key == other._key
+
+    def __hash__(self) -> int:
+        return hash(self._key)
+
     @overload
     def __get__(
         self, instance: None, owner: type | None = None
@@ -109,6 +124,9 @@ def css(expression: str) -> _SelectorListDeclaration:
 
 def xpath(expression: str) -> _SelectorListDeclaration:
     """Return a declaration of the XPath *expression*.
+
+    An expression that needs namespace prefixes or variables must go through
+    :meth:`~.SelectorShortcutsMixin.xpath` instead.
 
     See :func:`~web_poet.css`.
     """

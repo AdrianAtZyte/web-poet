@@ -7,6 +7,8 @@ import pytest
 
 from benchmarks.pages import (
     ArticlePage,
+    DeclarativeArticlePage,
+    DeclarativeProductPage,
     JmesPathArticlePage,
     JobPostingPage,
     JsonLdArticlePage,
@@ -26,8 +28,10 @@ if TYPE_CHECKING:
 #: changes to the page object it measures.
 BENCHMARKS: dict[str, tuple[type[ItemPage], str]] = {
     "product_imperative": (ProductPage, "product"),
+    "product_declarative": (DeclarativeProductPage, "product"),
     "product_details_nodes": (ProductDetailsPage, "product"),
     "article_imperative": (ArticlePage, "article"),
+    "article_declarative": (DeclarativeArticlePage, "article"),
     "article_jsonld": (JsonLdArticlePage, "article"),
     "article_jmespath": (JmesPathArticlePage, "article"),
     "job_imperative": (JobPostingPage, "job"),
@@ -43,6 +47,21 @@ def _extract(loop: asyncio.AbstractEventLoop, page: PageBuilder, name: str) -> A
 @pytest.mark.parametrize("name", list(BENCHMARKS))
 def test_extraction(benchmark, loop, page, name: str) -> None:
     benchmark(_extract, loop, page, name)
+
+
+#: Every declarative benchmark, paired with the imperative one it mirrors.
+TWINS = [
+    (name, name.replace("_declarative", "_imperative"))
+    for name in BENCHMARKS
+    if name.endswith("_declarative")
+]
+
+
+@pytest.mark.parametrize(("declarative", "imperative"), TWINS)
+def test_twins_agree(loop, page, declarative: str, imperative: str) -> None:
+    """A declarative page object extracts what the imperative one that it
+    mirrors extracts, so that their benchmarks compare like with like."""
+    assert _extract(loop, page, declarative) == _extract(loop, page, imperative)
 
 
 @pytest.mark.parametrize("name", list(BENCHMARKS))

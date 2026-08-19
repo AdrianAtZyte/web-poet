@@ -17,7 +17,6 @@ from web_poet import (
     jmespath,
     xpath,
 )
-from web_poet import mixins as _mixins
 from web_poet._frostwork import _get_page
 from web_poet._selectors import _get_selectors_dict
 
@@ -42,14 +41,6 @@ HTML = """
 @pytest.fixture
 def response():
     return HttpResponse("http://example.com", HTML.encode("utf-8"), encoding="utf-8")
-
-
-@pytest.fixture
-def parsel_only(monkeypatch):
-    """Disable frostwork, so that parsel extracts every declaration."""
-    monkeypatch.setattr(
-        _mixins, "_frostwork_extract", lambda instance, declarations: {}
-    )
 
 
 @attrs.define
@@ -119,6 +110,17 @@ def test_values(response) -> None:
 def test_parsel_agreement(response, parsel_only) -> None:
     """Every declaration has the same value with either backend."""
     assert asyncio.run(Page(response=response).to_item()) == EXPECTED
+
+
+def test_extraction_is_eager(response) -> None:
+    """Reading one declaration that frostwork extracts extracts every other
+    declaration that frostwork extracts, in the same pass."""
+    page = Page(response=response)
+    assert page.name == " Foo "
+    declarations = _get_selectors_dict(Page)
+    assert set(page._selector_value_cache()) == {
+        declarations[name] for name in ("name", "images", "brand", "sources", "missing")
+    }
 
 
 def test_fallback_is_lazy(response) -> None:

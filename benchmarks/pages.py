@@ -5,7 +5,7 @@ from typing import Any
 
 import attrs
 
-from web_poet import WebPage, cached_method, field
+from web_poet import WebPage, cached_method, css, field, xpath
 
 
 def _clean(value: str | None) -> str | None:
@@ -86,6 +86,32 @@ class ProductPage(WebPage[Product]):
     @field(out=[_clean_all])
     def breadcrumbs(self) -> list[str]:
         return self.css("#wayfinding-breadcrumbs_feature_div a::text").getall()
+
+
+class DeclarativeProductPage(ProductPage):
+    """ProductPage with every selector declared instead of queried in a
+    method."""
+
+    name = field(css("#productTitle::text").get(), out=[_clean])
+    brand = field(css("#bylineInfo::text").get(), out=[_clean])
+    price = field(css("span.a-price span.a-offscreen::text").get(), out=[_clean])
+    regular_price = field(
+        css("span.a-price.a-text-price span.a-offscreen::text").get(), out=[_clean]
+    )
+    rating = field(css("#acrPopover::attr(title)").get(), out=[_clean])
+    review_count = field(css("#acrCustomerReviewText::text").get(), out=[_clean])
+    availability = field(
+        xpath('//div[@id="availability"]//span/text()').get(), out=[_clean]
+    )
+    sku = field(xpath('//input[@id="SKUX"]/@value').get(), out=[_clean])
+    main_image = field(xpath('//img[@id="landingImage"]/@src').get(), out=[_clean])
+    images = field(css("#altImages img::attr(src)").getall(), out=[_clean_all])
+    features = field(
+        css("#feature-bullets li span.a-list-item::text").getall(), out=[_clean_all]
+    )
+    breadcrumbs = field(
+        css("#wayfinding-breadcrumbs_feature_div a::text").getall(), out=[_clean_all]
+    )
 
 
 @attrs.define(kw_only=True)
@@ -177,6 +203,23 @@ class ArticlePage(WebPage[Article]):
     @field(out=[_clean_all])
     def figures(self) -> list[str]:
         return self.css("article figure img::attr(src)").getall()
+
+
+class DeclarativeArticlePage(ArticlePage):
+    """ArticlePage with every selector declared instead of queried in a
+    method."""
+
+    headline = field(css("h1::text").get(), out=[_clean])
+    description = field(
+        css('meta[property="og:description"]::attr(content)').get(), out=[_clean]
+    )
+    image = field(css('meta[property="og:image"]::attr(content)').get(), out=[_clean])
+    date_published = field(xpath("//time/@datetime").get(), out=[_clean])
+    sections = field(css("article h2::text").getall(), out=[_clean_all])
+    paragraphs = field(
+        css('article [data-component="text-block"] p::text').getall(), out=[_clean_all]
+    )
+    figures = field(css("article figure img::attr(src)").getall(), out=[_clean_all])
 
 
 @attrs.define(kw_only=True)

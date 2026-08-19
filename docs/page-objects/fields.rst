@@ -125,24 +125,25 @@ class of its own:
 Extracting with frostwork
 -------------------------
 
-Install frostwork_ to have it extract selector declarations instead of parsel.
+Install frostwork_ for faster extraction of CSS and XPath declarations that use
+``get()`` or ``getall()`` and are within the `frostwork selector contract`_.
 
 .. _frostwork: https://github.com/shaneaevans/frostwork
-
-frostwork scans the raw response once for all the declarations of a page object
-that it can extract: CSS and XPath declarations with ``get()`` or ``getall()``
-whose expression is within the `frostwork selector contract`_. parsel extracts
-the rest, one query per declaration, after building a selector for the whole
-response.
-
-The savings grow with the size of the response and with the number of
-declarations that frostwork extracts: expect extraction to be a few times
-faster for a small response, and an order of magnitude faster or more for a
-large one. Every declaration that parsel extracts instead, and every field that
-uses a query method, requires a parsel selector for the whole response, which
-reduces the savings, down to none for a page object that barely uses frostwork.
-
 .. _frostwork selector contract: https://github.com/shaneaevans/frostwork/blob/main/docs/COMPATIBILITY.md
+
+.. warning:: Where its contract documents a divergence, frostwork changes the
+    value of a declaration, and not only how long it takes to extract it. Most
+    notably, a declaration with no ``::text`` or ``::attr()`` gets the HTML of
+    its matches as the response writes it, where parsel gets it as lxml
+    rewrites it.
+
+.. frostwork-benchmark-start
+
+Measured with frostwork 0.1.0, extraction is about 5 times faster for a 288 KB
+article page and about 7 times faster for a 2.3 MB product page, with every
+field of both page objects declared.
+
+.. frostwork-benchmark-end
 
 .. _fields-sync-async:
 

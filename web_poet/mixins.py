@@ -67,15 +67,11 @@ class SelectorShortcutsMixin:
     ) -> dict[_SelectorDeclaration, Any]:
         """Return a value for every declaration in *declarations*.
 
+        frostwork extracts every declaration of the object that it supports in
+        a single pass, and parsel extracts the rest, one query per declaration.
         Values for declarations beyond those requested may be included in the
-        returned mapping; they are cached and reused. So an implementation that
-        extracts every declaration of the object in a single pass, as reported
-        by ``_get_selectors_dict()``, only runs once.
-
-        frostwork extracts every declaration that it supports, and parsel the
-        rest.
-
-        Override this to use an alternative extraction backend."""
+        returned mapping; they are cached and reused, so that a single pass
+        happens only once."""
         values = _frostwork_extract(self, declarations)
         for declaration in declarations:
             if declaration in values:
