@@ -125,11 +125,15 @@ class of its own:
 Extracting with frostwork
 -------------------------
 
-Install frostwork_ for faster extraction of CSS and XPath declarations that use
-``get()`` or ``getall()`` and are within the `frostwork selector contract`_.
+Install the ``frostwork`` extra for faster extraction of CSS and XPath
+declarations that use ``get()`` or ``getall()`` and are within the `frostwork
+selector contract`_:
 
-.. _frostwork: https://github.com/shaneaevans/frostwork
-.. _frostwork selector contract: https://github.com/shaneaevans/frostwork/blob/main/docs/COMPATIBILITY.md
+.. code-block:: shell
+
+    pip install web-poet[frostwork]
+
+.. _frostwork selector contract: https://github.com/scrapy/frostwork/blob/main/docs/COMPATIBILITY.md
 
 Extraction is several times faster for a page object whose every field is
 declared, and more so the larger the document.

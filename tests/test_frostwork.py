@@ -52,7 +52,7 @@ class Page(WebPage):
     missing = field(css(".missing::text").get())
 
     # Neither a selector list nor JMESPath is something that frostwork can
-    # extract, and :contains() is beyond its selector support.
+    # extract.
     price = field(css(".price::text"), out=[lambda value: value.get()])
     sku = field(jmespath("sku").get())
     description = field(css(".desc:contains('description')::text").get())
@@ -73,7 +73,14 @@ EXPECTED = {
 def test_extractable_declarations() -> None:
     page = _get_page(Page)
     assert page is not None
-    assert set(page[1].values()) == {"name", "images", "brand", "sources", "missing"}
+    assert set(page[1].values()) == {
+        "name",
+        "images",
+        "brand",
+        "sources",
+        "missing",
+        "description",
+    }
 
 
 def test_unsupported_declarations(response) -> None:
@@ -119,7 +126,8 @@ def test_extraction_is_eager(response) -> None:
     assert page.name == " Foo "
     declarations = _get_selectors_dict(Page)
     assert set(page._selector_value_cache()) == {
-        declarations[name] for name in ("name", "images", "brand", "sources", "missing")
+        declarations[name]
+        for name in ("name", "images", "brand", "sources", "missing", "description")
     }
 
 
