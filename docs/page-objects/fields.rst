@@ -95,6 +95,33 @@ read JSON embedded in a web page:
         def price(self) -> str | None:
             return self._ld.jmespath("offers.price").get()
 
+Selectors on other responses
+----------------------------
+
+Declarations apply to the response of their page object class. Give the
+response of an :ref:`additional request <additional-requests>` a page object
+class of its own:
+
+.. code-block:: python
+
+    import attrs
+    from web_poet import HttpClient, WebPage, css, field
+
+
+    @attrs.define
+    class PricePage(WebPage):
+        price = field(css(".price::text").get())
+
+
+    @attrs.define
+    class MyPage(WebPage):
+        http: HttpClient
+
+        @field
+        async def price(self) -> str | None:
+            response = await self.http.get("https://example.com/api/price")
+            return PricePage(response=response).price
+
 Extracting with frostwork
 -------------------------
 

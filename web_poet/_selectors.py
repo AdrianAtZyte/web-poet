@@ -37,7 +37,7 @@ def _validate(expression: str, syntax: _SelectorSyntax) -> None:
         _css_translator.css_to_xpath(expression)
     elif syntax == "xpath":
         XPath(expression)
-    elif _compile_jmespath is not None:
+    else:
         _compile_jmespath(expression)
 
 
@@ -121,6 +121,8 @@ def jmespath(expression: str) -> _JSONSelectorListDeclaration:
 
     See :func:`~web_poet.css`.
     """
+    if _compile_jmespath is None:
+        raise ImportError("Please install parsel >= 1.8.1 to get jmespath support")
     return _JSONSelectorListDeclaration(expression, "jmespath", "selector")
 
 

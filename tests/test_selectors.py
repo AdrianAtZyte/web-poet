@@ -19,6 +19,7 @@ from web_poet import (
     Returns,
     SelectorExtractor,
     WebPage,
+    _selectors,
     css,
     field,
     jmespath,
@@ -198,6 +199,32 @@ def test_jmespath_in_html() -> None:
     page = LdJsonPage(response=response)
     assert page.price == "10.00"
     assert page.currency == "USD"
+
+
+def test_additional_request(response) -> None:
+    """Declarations apply to the response of their page object class. A page
+    object class of its own gives the response of an additional request its own
+    declarations."""
+
+    async def download(request):
+        return HttpResponse(request.url, b"<h1>Bar</h1>", encoding="utf-8")
+
+    @attrs.define
+    class OtherPage(WebPage):
+        name = field(css("h1::text").get())
+
+    @attrs.define
+    class MainPage(Page):
+        http: HttpClient
+
+        @field
+        async def other_name(self) -> str | None:
+            response = await self.http.get("http://example.com/other")
+            return OtherPage(response=response).name
+
+    page = MainPage(response=response, http=HttpClient(download))
+    assert page.name == " Foo "
+    assert asyncio.run(page.other_name) == "Bar"
 
 
 def test_selector_declaration(response) -> None:
@@ -384,6 +411,12 @@ def test_invalid_jmespath_expression() -> None:
     exceptions = pytest.importorskip("jmespath.exceptions")
     with pytest.raises(exceptions.ParseError):
         jmespath("website.")
+
+
+def test_jmespath_unsupported(monkeypatch) -> None:
+    monkeypatch.setattr(_selectors, "_compile_jmespath", None)
+    with pytest.raises(ImportError, match=re.escape("parsel >= 1.8.1")):
+        jmespath("website.name")
 
 
 def test_extraction_error(response) -> None:
