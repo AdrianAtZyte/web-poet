@@ -6,13 +6,6 @@ import parsel
 from lxml.etree import XPath  # type: ignore[import-untyped]
 from parsel.csstranslator import HTMLTranslator
 
-try:
-    from jmespath import compile as _compile_jmespath  # type: ignore[import-untyped]
-except ImportError:
-    # parsel only requires jmespath since 1.8, the version that added JMESPath
-    # support.
-    _compile_jmespath = None  # type: ignore[assignment]
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -38,6 +31,12 @@ _SelectorMode = Literal["selector", "get", "getall"]
 # have translated.
 _css_translator = HTMLTranslator()
 
+_JMESPATH_ERROR = "Please install parsel >= 1.8.1 to get jmespath support"
+
+
+def _jmespath_supported() -> bool:
+    return hasattr(parsel.Selector, "jmespath")
+
 
 def _validate(expression: str, syntax: _SelectorSyntax) -> None:
     """Raise the underlying syntax error of *syntax* if *expression* cannot be
@@ -47,7 +46,11 @@ def _validate(expression: str, syntax: _SelectorSyntax) -> None:
     elif syntax == "xpath":
         XPath(expression)
     else:
-        _compile_jmespath(expression)
+        # parsel requires jmespath as of the version that added JMESPath
+        # support, so it is installed wherever the syntax is supported.
+        from jmespath import compile as compile_jmespath  # noqa: PLC0415
+
+        compile_jmespath(expression)
 
 
 class _SelectorDeclaration(Generic[_ValueT]):
@@ -92,7 +95,15 @@ class _SelectorDeclaration(Generic[_ValueT]):
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
-        return _declaration_value(instance, self)
+        try:
+            selector_value = instance._selector_value
+        except AttributeError:
+            raise TypeError(
+                f"{type(instance).__name__} does not support selector declarations, "
+                f"it provides no parsel selector. Inherit from a class that does, "
+                f"e.g. web_poet.WebPage or web_poet.SelectorExtractor."
+            ) from None
+        return selector_value(self)
 
 
 class _SelectorListDeclaration(
@@ -141,23 +152,9 @@ def jmespath(expression: str) -> _SelectorListDeclaration[Any, Any]:
 
     See :func:`~web_poet.css`.
     """
-    if _compile_jmespath is None:
-        raise ImportError("Please install parsel >= 1.8.1 to get jmespath support")
+    if not _jmespath_supported():
+        raise ImportError(_JMESPATH_ERROR)
     return _SelectorListDeclaration(expression, "jmespath", "selector")
-
-
-def _declaration_value(instance: Any, declaration: _SelectorDeclaration) -> Any:
-    """Return the value of *declaration* for *instance*, raising ``TypeError``
-    if *instance* has no selector to extract it from."""
-    try:
-        get_value = instance._selector_value
-    except AttributeError:
-        raise TypeError(
-            f"{type(instance).__name__} does not support selector declarations, "
-            f"it provides no parsel selector. Inherit from a class that does, "
-            f"e.g. web_poet.WebPage or web_poet.SelectorExtractor."
-        ) from None
-    return get_value(declaration)
 
 
 def _get_declaration(value: Any) -> _SelectorDeclaration | None:
@@ -196,10 +193,7 @@ def _build_selectors_dict(cls: type) -> dict[str, _SelectorDeclaration]:
     return result
 
 
-def _get_selectors_dict(cls_or_instance) -> dict[str, _SelectorDeclaration]:
-    """Return a dictionary with the selector declarations of a class or
-    instance: keys are attribute names, and values are declaration objects."""
-    cls = (
-        cls_or_instance if isinstance(cls_or_instance, type) else type(cls_or_instance)
-    )
+def _get_selectors_dict(cls: type) -> dict[str, _SelectorDeclaration]:
+    """Return a dictionary with the selector declarations of *cls*: keys are
+    attribute names, and values are declaration objects."""
     return _class_cached(cls, _SELECTORS_DICT_ATTRIBUTE, _build_selectors_dict)

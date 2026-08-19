@@ -14,7 +14,7 @@ from typing import Any, Generic, TypeVar, cast, overload
 import attrs
 from itemadapter import ItemAdapter
 
-from web_poet._selectors import _declaration_value, _SelectorDeclaration
+from web_poet._selectors import _SelectorDeclaration
 from web_poet.utils import cached_method, callable_has_parameter, ensure_awaitable
 
 _FIELDS_INFO_ATTRIBUTE_READ = "_web_poet_fields_info"
@@ -82,17 +82,14 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         self.cached = cached
         self.meta = meta
         self.out = out
-        self.name: str | None = None
+        # Fields set on a class after its creation get no __set_name__ call,
+        # and take the name of their method instead.
+        self.name: str | None = getattr(method, "__name__", None)
         self.selector_declaration = selector_declaration
         update_wrapper(cast("Callable", self), method)
 
     def __set_name__(self, owner, name: str) -> None:
-        self.name = name
-        if self.selector_declaration is not None:
-            # Input validation looks the field up on the validation item by the
-            # name of the method, and the method here is a generated closure.
-            self.original_method.__name__ = name
-            self.__name__ = name
+        self.name = self.__name__ = name
         if not hasattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE):
             setattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE, {})
 
@@ -125,10 +122,10 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         cache_key = id(self)
         method = self._get_processed_method(owner, cache_key)
         if method is None:
+            assert self.name is not None
             if self.out is not None:
                 processor_functions = self.out
             elif hasattr(owner, "Processors"):
-                assert self.name is not None
                 processor_functions = getattr(owner.Processors, self.name, [])
             else:
                 processor_functions = []
@@ -136,7 +133,7 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
             for processor_function in processor_functions:
                 takes_page = callable_has_parameter(processor_function, "page")
                 processors.append((processor_function, takes_page))
-            method = self._processed(self.original_method, processors)
+            method = self._processed(self.original_method, processors, self.name)
             if self.cached:
                 method = cached_method(method)
             self._set_processed_method(owner, cache_key, method)
@@ -158,7 +155,7 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         return value
 
     @staticmethod
-    def _processed(method, processors: list[tuple[Callable, bool]]):
+    def _processed(method, processors: list[tuple[Callable, bool]], name: str):
         """Returns a wrapper for method that calls processors on its result"""
         if inspect.iscoroutinefunction(method):
 
@@ -166,7 +163,7 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
                 if hasattr(page, "_validate_input"):
                     validation_item = page._validate_input()
                     if validation_item is not None:
-                        return getattr(validation_item, method.__name__)
+                        return getattr(validation_item, name)
                 return _FieldDescriptor._process(await method(page), page, processors)
 
         else:
@@ -175,10 +172,14 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
                 if hasattr(page, "_validate_input"):
                     validation_item = page._validate_input()
                     if validation_item is not None:
-                        return getattr(validation_item, method.__name__)
+                        return getattr(validation_item, name)
                 return _FieldDescriptor._process(method(page), page, processors)
 
-        return wraps(method)(processed)
+        wrapper = wraps(method)(processed)
+        # cached_method names its cache attribute after the function, so the
+        # field name is what keeps the cache of each field separate.
+        wrapper.__name__ = name
+        return wrapper
 
 
 @overload
@@ -239,17 +240,12 @@ def field(
 
     if isinstance(method, _SelectorDeclaration):
         # field(css(...).get()) syntax
-        declaration = method
-
-        def selector_method(page):
-            return _declaration_value(page, declaration)
-
         return _FieldDescriptor(
-            selector_method,
+            method.__get__,
             cached=cached,
             meta=meta,
             out=out,
-            selector_declaration=declaration,
+            selector_declaration=method,
         )
 
     if method is not None:

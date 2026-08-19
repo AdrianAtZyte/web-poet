@@ -35,12 +35,8 @@ def _build_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | Non
         return None
     candidates: dict[_SelectorDeclaration, str] = {}
     for name, declaration in _get_selectors_dict(cls).items():
-        if (
-            declaration.mode in _METHODS
-            and declaration.syntax in _SYNTAXES
-            and declaration not in candidates
-        ):
-            candidates[declaration] = name
+        if declaration.mode in _METHODS and declaration.syntax in _SYNTAXES:
+            candidates.setdefault(declaration, name)
     if not candidates:
         return None
     report = check(
@@ -88,8 +84,4 @@ def _extract(
         return {}
     html, encoding = document
     values = page.extract(html, encoding).to_dict()
-    return {
-        declaration: values[name]
-        for declaration, name in names.items()
-        if name in values
-    }
+    return {declaration: values[name] for declaration, name in names.items()}

@@ -8,6 +8,7 @@ import parsel
 from w3lib.html import get_base_url
 
 from web_poet._frostwork import _extract as _frostwork_extract
+from web_poet._selectors import _JMESPATH_ERROR, _jmespath_supported
 from web_poet.utils import cached_method
 
 if TYPE_CHECKING:
@@ -36,10 +37,8 @@ class SelectorShortcutsMixin:
 
     def jmespath(self, query: str, **kwargs) -> parsel.SelectorList:
         """A shortcut to ``.selector.jmespath()``."""
-        if not hasattr(self.selector, "jmespath"):  # type: ignore[attr-defined]
-            raise AttributeError(
-                "Please install parsel >= 1.8.1 to get jmespath support"
-            )
+        if not _jmespath_supported():
+            raise AttributeError(_JMESPATH_ERROR)
         return self.selector.jmespath(query, **kwargs)  # type: ignore[attr-defined]
 
     def _selector_document(self) -> tuple[bytes | str, str | None] | None:

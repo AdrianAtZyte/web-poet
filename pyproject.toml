@@ -87,7 +87,7 @@ ignore_missing_imports = false
 implicit_reexport = false
 
 [[tool.mypy.overrides]]
-module = "frostwork"
+module = ["frostwork", "jmespath"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

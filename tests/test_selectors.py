@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from types import SimpleNamespace
 
 import attrs
 import parsel
@@ -19,7 +20,6 @@ from web_poet import (
     Returns,
     SelectorExtractor,
     WebPage,
-    _selectors,
     css,
     field,
     jmespath,
@@ -109,10 +109,6 @@ def test_get_selectors_dict_before_instantiation() -> None:
     assert declarations["name"].expression == "h1::text"
     assert declarations["images"].mode == "getall"
     assert declarations["name"].mode == "get"
-
-
-def test_get_selectors_dict_instance(response) -> None:
-    assert _get_selectors_dict(Page(response=response)) == _get_selectors_dict(Page)
 
 
 def test_class_access() -> None:
@@ -404,7 +400,7 @@ def test_invalid_jmespath_expression() -> None:
 
 
 def test_jmespath_unsupported(monkeypatch) -> None:
-    monkeypatch.setattr(_selectors, "_compile_jmespath", None)
+    monkeypatch.delattr(parsel.Selector, "jmespath", raising=False)
     with pytest.raises(ImportError, match=re.escape("parsel >= 1.8.1")):
         jmespath("website.name")
 
@@ -472,6 +468,34 @@ def test_query_method_name(response) -> None:
     page = QueryPage(response=response)
     assert page.css == " Foo "
     assert page.xpath == " Foo "
+
+
+def test_cached(response) -> None:
+    """Each cached field caches its own value."""
+
+    @attrs.define
+    class CachedPage(WebPage):
+        name = field(css("h1::text").get(), cached=True)
+        price = field(css(".price::text").get(), cached=True)
+
+    page = CachedPage(response=response)
+    assert page.name == " Foo "
+    assert page.price == "10.00"
+    assert page.name == " Foo "
+
+
+def test_input_validation(response) -> None:
+    """Input validation replaces the value of a declared field with the value
+    that the validation item has for it."""
+
+    @attrs.define
+    class ValidatingPage(WebPage):
+        name = field(css("h1::text").get())
+
+        def validate_input(self):
+            return SimpleNamespace(name="Bar")
+
+    assert ValidatingPage(response=response).name == "Bar"
 
 
 def test_no_selector() -> None:
