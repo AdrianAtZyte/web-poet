@@ -131,19 +131,17 @@ Install frostwork_ for faster extraction of CSS and XPath declarations that use
 .. _frostwork: https://github.com/shaneaevans/frostwork
 .. _frostwork selector contract: https://github.com/shaneaevans/frostwork/blob/main/docs/COMPATIBILITY.md
 
+Extraction is several times faster for a page object whose every field is
+declared, and more so the larger the document.
+
 .. warning:: Where its contract documents a divergence, frostwork changes the
     value of a declaration, and not only how long it takes to extract it. Most
     notably, a declaration with no ``::text`` or ``::attr()`` gets the HTML of
     its matches as the response writes it, where parsel gets it as lxml
     rewrites it.
 
-.. frostwork-benchmark-start
-
-Measured with frostwork 0.1.0, extraction is about 5 times faster for a 288 KB
-article page and about 7 times faster for a 2.3 MB product page, with every
-field of both page objects declared.
-
-.. frostwork-benchmark-end
+    Write a field as a method, e.g. ``self.css(".price::text").get()``, for
+    parsel to extract it.
 
 .. _fields-sync-async:
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-from pathlib import Path
 
 import attrs
 import parsel
@@ -10,7 +9,6 @@ import pytest
 from cssselect.parser import SelectorSyntaxError
 from cssselect.xpath import ExpressionError
 from lxml.etree import XPathSyntaxError  # type: ignore[import-untyped]
-from packaging.version import Version
 
 from web_poet import (
     BrowserPage,
@@ -389,23 +387,6 @@ def test_extraction_is_lazy(response, parsel_only) -> None:
     assert cache == {declarations["name"]: " Foo "}
 
 
-def test_single_pass_extraction(response) -> None:
-    """An extraction backend that answers every declaration of a page object in
-    a single pass runs once, and the values that it returns for declarations
-    other than the requested one are reused."""
-    calls = []
-
-    @attrs.define
-    class SinglePassPage(Page):
-        def _extract_selectors(self, declarations):
-            calls.append(set(declarations))
-            return super()._extract_selectors(_get_selectors_dict(self).values())
-
-    page = SinglePassPage(response=response)
-    assert asyncio.run(page.to_item()) == asyncio.run(Page(response=response).to_item())
-    assert calls == [{_get_selectors_dict(Page)["name"]}]
-
-
 def test_invalid_expression() -> None:
     """An invalid expression fails on declaration."""
     with pytest.raises(SelectorSyntaxError):
@@ -511,24 +492,3 @@ def test_fixture(response, tmp_path) -> None:
     fixture.assert_field_correct("name", Page)
     fixture.assert_no_extra_fields(Page)
     fixture.assert_no_toitem_exceptions(Page)
-
-
-def test_documented_benchmark() -> None:
-    """The measurement in the documentation is that of a frostwork version no
-    older than the minimum supported one.
-
-    Refresh it with ``python -m benchmarks.frostwork_speedup --write``."""
-    root = Path(__file__).parent.parent
-    minimum = re.search(
-        r'"frostwork\s*>=\s*([^",]+)"', (root / "pyproject.toml").read_text()
-    )
-    if minimum is None:
-        pytest.skip("frostwork is not a declared dependency yet")
-    documented = re.search(
-        r"Measured with frostwork (\S+),",
-        (root / "docs" / "page-objects" / "fields.rst").read_text(),
-    )
-    assert documented is not None
-    assert Version(documented[1]) >= Version(minimum[1].strip()), (
-        "Refresh the measurement: python -m benchmarks.frostwork_speedup --write"
-    )

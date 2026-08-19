@@ -7,11 +7,9 @@ try:
 except ImportError:
     Page = None  # type: ignore[assignment,misc]
 
-from web_poet._selectors import _get_selectors_dict
+from web_poet._selectors import _class_cached, _get_selectors_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
-
     from web_poet._selectors import _SelectorDeclaration
 
 _PAGE_ATTRIBUTE = "_web_poet_frostwork_page"
@@ -26,18 +24,17 @@ _METHODS = {"get": "field", "getall": "field_all"}
 _SYNTAXES = {"css", "xpath"}
 
 
-def _build_page(
-    declarations: dict[str, _SelectorDeclaration],
-) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
-    """Return a frostwork page for the declarations that frostwork can extract,
-    mapped to the name that they have on it, or ``None`` if there are none.
+def _build_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
+    """Return a frostwork page for the declarations of *cls* that frostwork can
+    extract, mapped to the name that they have on it, or ``None`` if there are
+    none.
 
     Declarations that are equal are extracted once, under the first attribute
     name that uses one."""
     if Page is None:
         return None
     candidates: dict[_SelectorDeclaration, str] = {}
-    for name, declaration in declarations.items():
+    for name, declaration in _get_selectors_dict(cls).items():
         if (
             declaration.mode in _METHODS
             and declaration.syntax in _SYNTAXES
@@ -69,35 +66,25 @@ def _build_page(
 
 
 def _get_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
-    """Return the frostwork page of *cls*, building it on the first call.
-
-    Like the selector declarations that it is built from, it is derived and
-    cached on the class where it is derived, so that it survives attrs
-    recreating the class."""
-    try:
-        return cls.__dict__[_PAGE_ATTRIBUTE]
-    except KeyError:
-        result = _build_page(_get_selectors_dict(cls))
-        setattr(cls, _PAGE_ATTRIBUTE, result)
-        return result
+    """Return the frostwork page of *cls*, building it on the first call."""
+    return _class_cached(cls, _PAGE_ATTRIBUTE, _build_page)
 
 
 def _extract(
-    instance: Any, declarations: Collection[_SelectorDeclaration]
+    cls: type,
+    declaration: _SelectorDeclaration,
+    document: tuple[bytes | str, str | None],
 ) -> dict[_SelectorDeclaration, Any]:
-    """Return the value of every declaration of *instance* that frostwork can
-    extract, provided that at least one of *declarations* is among them.
+    """Return the value of every declaration of *cls* that frostwork can
+    extract out of *document*, provided that *declaration* is among them.
 
     Return an empty mapping otherwise, including when frostwork is not
-    installed or *instance* provides no raw document to scan."""
-    result = _get_page(type(instance))
+    installed."""
+    result = _get_page(cls)
     if result is None:
         return {}
     page, names = result
-    if names.keys().isdisjoint(declarations):
-        return {}
-    document = instance._selector_document()
-    if document is None:
+    if declaration not in names:
         return {}
     html, encoding = document
     values = page.extract(html, encoding).to_dict()

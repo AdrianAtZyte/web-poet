@@ -11,8 +11,6 @@ from web_poet._frostwork import _extract as _frostwork_extract
 from web_poet.utils import cached_method
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
-
     from web_poet._selectors import _SelectorDeclaration
     from web_poet.page_inputs.url import RequestUrl, ResponseUrl
 
@@ -56,38 +54,30 @@ class SelectorShortcutsMixin:
 
     def _selector_value(self, declaration: _SelectorDeclaration) -> Any:
         """Return the value of *declaration* for this object, extracting it on
-        the first call."""
+        the first call.
+
+        frostwork extracts *declaration* along with every other declaration of
+        the object that it supports, in a single pass; those extra values are
+        cached and reused, so that a single pass happens only once."""
         values = self._selector_value_cache()
         if declaration not in values:
-            values.update(self._extract_selectors([declaration]))
+            document = self._selector_document()
+            if document is not None:
+                values.update(_frostwork_extract(type(self), declaration, document))
+            if declaration not in values:
+                values[declaration] = self._parsel_value(declaration)
         return values[declaration]
 
-    def _extract_selectors(
-        self, declarations: Collection[_SelectorDeclaration]
-    ) -> dict[_SelectorDeclaration, Any]:
-        """Return a value for every declaration in *declarations*.
-
-        frostwork extracts every declaration of the object that it supports in
-        a single pass, and parsel extracts the rest, one query per declaration.
-        Values for declarations beyond those requested may be included in the
-        returned mapping; they are cached and reused, so that a single pass
-        happens only once."""
-        values = _frostwork_extract(self, declarations)
-        for declaration in declarations:
-            if declaration in values:
-                continue
-            # Going through the mixin, and not through self, keeps a field
-            # named css, xpath or jmespath from shadowing the query method.
-            query = getattr(SelectorShortcutsMixin, declaration.syntax)
-            selector_list = query(self, declaration.expression)
-            # Modes other than selector are named after the parsel selector
-            # list method that implements them.
-            values[declaration] = (
-                selector_list
-                if declaration.mode == "selector"
-                else getattr(selector_list, declaration.mode)()
-            )
-        return values
+    def _parsel_value(self, declaration: _SelectorDeclaration) -> Any:
+        # Going through the mixin, and not through self, keeps a field named
+        # css, xpath or jmespath from shadowing the query method.
+        query = getattr(SelectorShortcutsMixin, declaration.syntax)
+        selector_list = query(self, declaration.expression)
+        # Modes other than selector are named after the parsel selector list
+        # method that implements them.
+        if declaration.mode == "selector":
+            return selector_list
+        return getattr(selector_list, declaration.mode)()
 
 
 class SelectableMixin(abc.ABC, SelectorShortcutsMixin):

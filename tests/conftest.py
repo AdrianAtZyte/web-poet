@@ -15,7 +15,9 @@ pytest_plugins = ["pytester"]
 def parsel_only(monkeypatch):
     """Disable frostwork, so that parsel extracts every selector
     declaration."""
-    monkeypatch.setattr(mixins, "_frostwork_extract", lambda instance, declarations: {})
+    monkeypatch.setattr(
+        mixins, "_frostwork_extract", lambda cls, declaration, document: {}
+    )
 
 
 def read_fixture(path: str) -> str:
