@@ -265,6 +265,18 @@ def test_field_not_callable() -> None:
         field(1)  # type: ignore[call-overload]
 
 
+def test_selector_field_name_before_set_name() -> None:
+    """A selector declaration has no method of its own to name a field after,
+    unlike a field assigned a plain method outside a class body."""
+    descriptor = field(css("h1::text").get())
+    assert descriptor.name is None  # type: ignore[attr-defined]
+
+    def name(page):
+        return "Foo"
+
+    assert field(name).name == "name"  # type: ignore[attr-defined]
+
+
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):

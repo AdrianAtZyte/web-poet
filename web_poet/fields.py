@@ -83,8 +83,14 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         self.meta = meta
         self.out = out
         # Fields set on a class after its creation get no __set_name__ call,
-        # and take the name of their method instead.
-        self.name: str | None = getattr(method, "__name__", None)
+        # and take the name of their method instead. A selector declaration
+        # has no method of its own, only its __get__ bound method, so it gets
+        # no name until __set_name__ runs.
+        self.name: str | None = (
+            None
+            if selector_declaration is not None
+            else getattr(method, "__name__", None)
+        )
         self.selector_declaration = selector_declaration
         update_wrapper(cast("Callable", self), method)
 
