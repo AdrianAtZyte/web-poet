@@ -239,7 +239,8 @@ def field(
     corresponding item attribute.
 
     Instead of a method, you can pass a selector declaration, e.g. from
-    :func:`~web_poet.css`. See :ref:`declarative-selectors`.
+    :func:`~web_poet.css`. See :ref:`declarative-selectors`. Its value is
+    extracted once per page object, so *cached* only spares the processors.
 
     By default, the value is computed on each property access. Use
     ``@field(cached=True)`` to cache the property value.

@@ -381,3 +381,35 @@ class MinimalPage(WebPage[Minimal]):
     @field(out=[_clean])
     def link(self) -> str | None:
         return self.xpath("//a/@href").get()
+
+
+class DeclarativeJobPostingPage(JobPostingPage):
+    """JobPostingPage with every selector declared instead of queried in a
+    method."""
+
+    title = field(css("h1::text").get(), out=[_clean])
+    company = field(css(".topcard__org-name-link::text").get(), out=[_clean])
+    location = field(css(".topcard__flavor--bullet::text").get(), out=[_clean])
+    posted = field(css(".posted-time-ago__text::text").get(), out=[_clean])
+    applicants = field(css(".num-applicants__caption::text").get(), out=[_clean])
+    description = field(
+        css(".show-more-less-html__markup ::text").getall(), out=[" ".join, _clean]
+    )
+    criteria_labels = field(
+        css(".description__job-criteria-subheader::text").getall(), out=[_clean_all]
+    )
+    criteria_values = field(
+        xpath(
+            '//span[contains(@class, "description__job-criteria-text")]/text()'
+        ).getall(),
+        out=[_clean_all],
+    )
+
+
+class DeclarativeMinimalPage(MinimalPage):
+    """MinimalPage with every selector declared instead of queried in a
+    method."""
+
+    title = field(css("title::text").get(), out=[_clean])
+    heading = field(css("h1::text").get(), out=[_clean])
+    link = field(xpath("//a/@href").get(), out=[_clean])

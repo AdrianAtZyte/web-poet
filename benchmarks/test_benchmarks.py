@@ -8,6 +8,8 @@ import pytest
 from benchmarks.pages import (
     ArticlePage,
     DeclarativeArticlePage,
+    DeclarativeJobPostingPage,
+    DeclarativeMinimalPage,
     DeclarativeProductPage,
     JmesPathArticlePage,
     JobPostingPage,
@@ -35,8 +37,18 @@ BENCHMARKS: dict[str, tuple[type[ItemPage], str]] = {
     "article_jsonld": (JsonLdArticlePage, "article"),
     "article_jmespath": (JmesPathArticlePage, "article"),
     "job_imperative": (JobPostingPage, "job"),
+    "job_declarative": (DeclarativeJobPostingPage, "job"),
     "minimal": (MinimalPage, "minimal"),
+    "minimal_declarative": (DeclarativeMinimalPage, "minimal"),
 }
+
+TWINS = {
+    "product_declarative": "product_imperative",
+    "article_declarative": "article_imperative",
+    "job_declarative": "job_imperative",
+    "minimal_declarative": "minimal",
+}
+"""Every declarative benchmark, mapped to the imperative one it mirrors."""
 
 
 def _extract(loop: asyncio.AbstractEventLoop, page: PageBuilder, name: str) -> Any:
@@ -49,15 +61,7 @@ def test_extraction(benchmark, loop, page, name: str) -> None:
     benchmark(_extract, loop, page, name)
 
 
-#: Every declarative benchmark, paired with the imperative one it mirrors.
-TWINS = [
-    (name, name.replace("_declarative", "_imperative"))
-    for name in BENCHMARKS
-    if name.endswith("_declarative")
-]
-
-
-@pytest.mark.parametrize(("declarative", "imperative"), TWINS)
+@pytest.mark.parametrize(("declarative", "imperative"), TWINS.items())
 def test_twins_agree(loop, page, declarative: str, imperative: str) -> None:
     """A declarative page object extracts what the imperative one that it
     mirrors extracts, so that their benchmarks compare like with like."""
