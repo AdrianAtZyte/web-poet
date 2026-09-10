@@ -107,6 +107,13 @@ ignore_errors = true
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    # The min env opts out of this, see tox.ini.
+    "error",
+    # The test rules mirror real-world page object hierarchies, where several
+    # rules for the same item class and URL pattern are the norm.
+    "ignore:The registry contains .* conflicting rules:UserWarning",
+]
 
 [tool.ruff]
 target-version = "py310"  # until we migrate away from setup.py

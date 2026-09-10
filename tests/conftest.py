@@ -20,6 +20,14 @@ def parsel_only(monkeypatch):
     )
 
 
+@pytest.fixture(name="pytester")
+def _pytester(pytester):
+    # Nested pytest runs start in an empty directory, so they need their own
+    # configuration.
+    pytester.makeini("[pytest]\nasyncio_default_fixture_loop_scope = function\n")
+    return pytester
+
+
 def read_fixture(path: str) -> str:
     return (Path(__file__).parent / path).read_text(encoding="utf-8")
 
