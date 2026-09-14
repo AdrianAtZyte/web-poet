@@ -106,10 +106,6 @@ Mixins
     :inherited-members:
     :no-special-members:
 
-.. autoclass:: web_poet.mixins.SelectorShortcutsMixin
-    :members:
-    :no-special-members:
-
 Requests
 ========
 

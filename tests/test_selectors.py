@@ -277,6 +277,21 @@ def test_selector_field_name_before_set_name() -> None:
     assert field(name).name == "name"  # type: ignore[attr-defined]
 
 
+def test_selector_field_outside_class_body(response) -> None:
+    @attrs.define
+    class LatePage(WebPage):
+        pass
+
+    LatePage.name = field(css("h1::text").get())  # type: ignore[attr-defined]
+    with pytest.raises(TypeError, match="assigned in a class body"):
+        LatePage(response=response).name  # type: ignore[attr-defined]
+
+
+def test_field_metadata() -> None:
+    assert Page.name.__name__ == "name"
+    assert Page.name.__qualname__ == "Page.name"
+
+
 def test_out(response) -> None:
     @attrs.define
     class OutPage(WebPage):

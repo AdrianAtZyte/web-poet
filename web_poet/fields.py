@@ -104,6 +104,7 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
 
     def __set_name__(self, owner, name: str) -> None:
         self.name = self.__name__ = name
+        self.__qualname__ = f"{owner.__qualname__}.{name}"
         if not hasattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE):
             setattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE, {})
 
@@ -136,7 +137,11 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         cache_key = id(self)
         method = self._get_processed_method(owner, cache_key)
         if method is None:
-            assert self.name is not None
+            if self.name is None:
+                raise TypeError(
+                    "A field built out of a selector declaration must be "
+                    "assigned in a class body."
+                )
             if self.out is not None:
                 processor_functions = self.out
             elif hasattr(owner, "Processors"):

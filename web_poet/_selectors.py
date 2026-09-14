@@ -123,9 +123,9 @@ def css(expression: str) -> _SelectorListDeclaration[str | None, str]:
     attribute of a page object class, either on its own or through
     :func:`~web_poet.field`.
 
-    Its value is a :class:`~parsel.selector.SelectorList`. Call ``get()`` on the
-    declaration for the value of its first match, or ``None``, and ``getall()``
-    for the list of the values of all its matches.
+    Its value is a :class:`~parsel.selector.SelectorList`. Call ``get()`` on
+    the declaration for the value of its first match, or ``None``, and
+    ``getall()`` for the list of the values of all its matches.
 
     See :ref:`declarative-selectors`.
     """
@@ -136,7 +136,7 @@ def xpath(expression: str) -> _SelectorListDeclaration[str | None, str]:
     """Return a declaration of the XPath *expression*.
 
     An expression that needs namespace prefixes or variables must go through
-    :meth:`~.SelectorShortcutsMixin.xpath` instead.
+    :meth:`~.SelectableMixin.xpath` instead.
 
     See :func:`~web_poet.css`.
     """

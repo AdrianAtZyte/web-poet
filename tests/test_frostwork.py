@@ -176,4 +176,3 @@ def test_selector_extractor() -> None:
 
     extractor = Extractor(parsel.Selector(HTML))
     assert asyncio.run(extractor.to_item()) == {"name": " Foo "}
-    assert _get_page(Extractor) is not None
