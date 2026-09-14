@@ -152,12 +152,11 @@ class ResponseShortcutsMixin(Generic[ResponseT], SelectableMixin, UrlShortcutsMi
 
     def _selector_document(self) -> tuple[bytes | str, str | None]:
         response: Any = self.response
-        try:
-            body = response.body
-        except AttributeError:
+        body = getattr(response, "body", None)
+        if body is None:
             # A browser response is HTML that has already been decoded.
             return self.html, None
-        return body, response.encoding
+        return body, getattr(response, "encoding", None)
 
     @property
     def base_url(self) -> str:
