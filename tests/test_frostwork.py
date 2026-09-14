@@ -152,6 +152,25 @@ def test_reused_declaration(response) -> None:
     assert ReusePage(response=response).price == 10.0
 
 
+def test_unknown_encoding() -> None:
+    """A document in an encoding that frostwork does not know is left to
+    parsel, which decodes it as declared."""
+
+    @attrs.define
+    class EncodedPage(WebPage):
+        name = field(css("h1::text").get())
+        brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+
+    body = "<html><body><h1>Caf\u00e9</h1></body></html>".encode("cp437")
+    page = EncodedPage(
+        response=HttpResponse("http://example.com", body, encoding="cp437")
+    )
+    assert page.name == "Caf\u00e9"
+    assert set(page._selector_value_cache()) == {
+        _get_selectors_dict(EncodedPage)["name"]
+    }
+
+
 def test_browser_page() -> None:
     """A browser response provides no bytes to scan, but its HTML can be
     scanned as it is."""

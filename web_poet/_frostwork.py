@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import codecs
 from typing import TYPE_CHECKING, Any
 
 try:
-    from frostwork import Page, check
+    from frostwork import Page, check, detect_encoding
 except ImportError:
     Page = None  # type: ignore[assignment,misc]
 
@@ -83,5 +84,18 @@ def _extract(
     if declaration not in names:
         return {}
     html, encoding = document
+    if encoding is not None:
+        # frostwork sniffs an encoding out of the document when it does not
+        # know the one given to it, and the values of a document that it
+        # decodes differently from the parsed one belong to parsel.
+        try:
+            same_encoding = (
+                codecs.lookup(detect_encoding(html, encoding)).name
+                == codecs.lookup(encoding).name
+            )
+        except LookupError:
+            same_encoding = False
+        if not same_encoding:
+            return {}
     values = page.extract(html, encoding).to_dict()
     return {declaration: values[name] for declaration, name in names.items()}
