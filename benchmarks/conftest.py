@@ -85,7 +85,9 @@ def page(
     parses the document again on every call, as it does when a spider downloads
     a page. A warm one is new too, so that nothing that it caches carries over,
     but it shares the response and the parsed selector of the ones before it,
-    which leaves only the queries and the field machinery to measure."""
+    which leaves only the queries and the field machinery to measure. A
+    frostwork scan works on the response, so a warm page saves it the decoding
+    alone."""
     if request.param == "warm":
         return warm_pages
     return lambda page_cls, name: _build(page_cls, name, bodies)

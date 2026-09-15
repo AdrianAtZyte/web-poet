@@ -51,11 +51,12 @@ class Page(WebPage):
     sources = field(xpath("//img/@src").getall())
     missing = field(css(".missing::text").get())
 
+    description = field(css(".desc:contains('description')::text").get())
+
     # Neither a selector list nor JMESPath is something that frostwork can
     # extract.
     price = field(css(".price::text"), out=[lambda value: value.get()])
     sku = field(jmespath("sku").get())
-    description = field(css(".desc:contains('description')::text").get())
 
 
 EXPECTED = {
