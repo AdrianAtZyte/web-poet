@@ -4,6 +4,9 @@ import json
 
 import attrs
 import pytest
+
+pytest.importorskip("instructor")
+
 from instructor import AsyncInstructor, Mode, patch
 from instructor.cache import AutoCache
 from instructor.core.exceptions import InstructorRetryException
