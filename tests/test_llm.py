@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import json
+from typing import Literal
 
 import attrs
 import pytest
@@ -63,6 +64,7 @@ class Offer:
     price: str
     tags: list[str] = attrs.Factory(list)
     currency: str | None = None
+    condition: Literal["new", "used"] | None = None
     summary: str = attrs.field(init=False, default="")
 
 
@@ -84,8 +86,9 @@ async def test_pydantic():
 
 @pytest.mark.asyncio
 async def test_attrs():
-    client, fake = make_client({"price": "10", "summary": "Ten"})
-    assert await client.parse("$10", Offer) == Offer(price="10")
+    data = {"price": "10", "condition": "used", "summary": "Ten"}
+    client, fake = make_client(data)
+    assert await client.parse("$10, used", Offer) == Offer(price="10", condition="used")
     assert fake.calls == 1
 
 
