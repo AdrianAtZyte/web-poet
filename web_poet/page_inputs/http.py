@@ -16,11 +16,7 @@ from w3lib.encoding import (
 from w3lib.url import canonicalize_url
 
 from web_poet._base import _HttpHeaders
-from web_poet.mixins import (
-    _DEFAULT_BASE_URL_MAX_SCAN,
-    SelectableMixin,
-    UrlShortcutsMixin,
-)
+from web_poet.mixins import SelectableMixin, UrlShortcutsMixin
 from web_poet.utils import memoizemethod_noargs
 
 from .url import RequestUrl as _RequestUrl
@@ -179,14 +175,6 @@ class HttpResponse(SelectableMixin, UrlShortcutsMixin):
     When set, :attr:`text` and :attr:`encoding` come from
     :attr:`encoding_context`.
     """
-    base_url_max_scan: int | None = attrs.field(
-        default=_DEFAULT_BASE_URL_MAX_SCAN, kw_only=True
-    )
-    """Upper bound, in characters, on how much of the document is scanned for
-    a base URL, or ``None`` to scan all of it.
-
-    .. versionadded:: VERSION
-    """
     _encoding_context: EncodingContext | None = attrs.field(
         default=None, alias="encoding_context", kw_only=True
     )
@@ -235,9 +223,17 @@ class HttpResponse(SelectableMixin, UrlShortcutsMixin):
     def _selector_input(self) -> str:
         return self.text
 
-    @property
-    def _base_url_max_scan(self) -> int | None:
-        return self.base_url_max_scan
+    def _base_url_input(self) -> tuple[str | bytes, str]:
+        context = self.encoding_context
+        if context is None:
+            return self.body, self.encoding or self._DEFAULT_ENCODING
+        # The undecoded body can only be scanned under an encoding that Python
+        # can decode it with, which is where request_encoding keeps the
+        # document encoding and where it replaces it with UTF-8.
+        encoding = context.request_encoding
+        if encoding == context.encoding:
+            return context.body, encoding
+        return context.text, encoding
 
     @property
     def encoding(self) -> str | None:

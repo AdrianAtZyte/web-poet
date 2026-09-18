@@ -17,7 +17,6 @@ from .. import (
 )
 from ..annotated import AnnotatedInstance, annotation_decode, annotation_encode
 from ..exceptions import HttpError
-from ..mixins import _DEFAULT_BASE_URL_MAX_SCAN
 from ..page_inputs.client import _SavedResponseData
 from ..page_inputs.url import _Url
 from .api import (
@@ -72,8 +71,6 @@ def _serialize_HttpResponse(o: HttpResponse) -> SerializedLeafData:
     }
     if o.encoding_backend is not None:
         info["encoding_policy"] = o.encoding_backend.policy_id
-    if o.base_url_max_scan != _DEFAULT_BASE_URL_MAX_SCAN:
-        info["base_url_max_scan"] = o.base_url_max_scan
     return {
         "body.html": bytes(o.body),
         "info.json": _format_json(info).encode(),
@@ -92,7 +89,6 @@ def _deserialize_HttpResponse(
         headers=info["headers"],
         encoding=info["_encoding"],
         encoding_backend=_encoding_backend(info.get("encoding_policy")),
-        base_url_max_scan=info.get("base_url_max_scan", _DEFAULT_BASE_URL_MAX_SCAN),
     )
 
 

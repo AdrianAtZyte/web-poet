@@ -132,9 +132,16 @@ def register_encoding_backend(backend: EncodingBackend) -> None:
     Serialized responses record the policy ID of the
     :class:`~w3lib.encoding.EncodingBackend` that decoded them, and
     deserializing one requires the matching backend to be registered, so that
-    text is decoded under the policy it was recorded with.
+    text is decoded under the policy it was recorded with. Registering a
+    different backend for an already registered policy ID raises
+    :exc:`ValueError`.
     """
-    _ENCODING_BACKENDS[backend.policy_id] = backend
+    registered = _ENCODING_BACKENDS.setdefault(backend.policy_id, backend)
+    if registered is not backend:
+        raise ValueError(
+            f"Encoding policy {backend.policy_id!r} is already registered "
+            f"for {registered!r}."
+        )
 
 
 def _encoding_backend(policy_id: str | None) -> EncodingBackend | None:

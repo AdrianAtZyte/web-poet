@@ -26,6 +26,7 @@ from web_poet.serialization import (
     SerializedLeafData,
     deserialize,
     deserialize_leaf,
+    register_encoding_backend,
     register_serialization,
     serialize,
     serialize_leaf,
@@ -232,16 +233,13 @@ def test_serialization_httpresponse_encoding_backend(
         url=ResponseUrl("http://books.toscrape.com/index.html"),
         body=HttpResponseBody(b"<p>\xe9</p>"),
         encoding_backend=registered_encoding_backend,
-        base_url_max_scan=None,
     )
     data = serialize_leaf(response)
     info = json.loads(data["info.json"])
     assert info["encoding_policy"] == "test-latin1"
-    assert info["base_url_max_scan"] is None
 
     deserialized_response = deserialize_leaf(HttpResponse, data)
     assert deserialized_response.encoding_backend is registered_encoding_backend
-    assert deserialized_response.base_url_max_scan is None
     assert deserialized_response.text == response.text
 
 
@@ -257,6 +255,19 @@ def test_serialization_httpresponse_unregistered_encoding_policy(
     data["info.json"] = data["info.json"].replace(b"test-latin1", b"unknown")
     with pytest.raises(ValueError, match=r"encoding policy 'unknown'"):
         deserialize_leaf(HttpResponse, data)
+
+
+def test_register_encoding_backend_twice(registered_encoding_backend) -> None:
+    register_encoding_backend(registered_encoding_backend)
+
+    class _Other:
+        policy_id = registered_encoding_backend.policy_id
+
+        def resolve(self, body, content_type="", encoding=None):  # pragma: nocover
+            raise NotImplementedError
+
+    with pytest.raises(ValueError, match=r"'test-latin1' is already registered"):
+        register_encoding_backend(_Other())
 
 
 def test_custom_functions() -> None:

@@ -365,24 +365,62 @@ def test_encoding_backend(encoding_backend) -> None:
     assert response.css("p::text").get() == "Ã©"
 
 
-def test_base_url_max_scan() -> None:
-    url = "http://www.example.com/index.html"
-    tag = b'<base href="/base/">'
-    found = "http://www.example.com/base/a"
-    missing = "http://www.example.com/a"
+class _NoDecodeBackend:
+    """Backend whose decoder refuses to run, to catch a needless decode."""
 
-    response = HttpResponse(url, b" " * 4096 + tag)
-    assert str(response.urljoin("a")) == missing
+    policy_id = "test-no-decode"
 
-    # A tag that starts within the scanned prefix is read to its end.
-    response = HttpResponse(url, b" " * 4091 + tag)
-    assert str(response.urljoin("a")) == found
+    def resolve(self, body, content_type="", encoding=None):
+        return _NoDecodeDecision()
 
-    response = HttpResponse(url, b" " * 4096 + tag, base_url_max_scan=8192)
-    assert str(response.urljoin("a")) == found
 
-    response = HttpResponse(url, b" " * 4096 + tag, base_url_max_scan=None)
-    assert str(response.urljoin("a")) == found
+class _NoDecodeDecision:
+    name = "utf-8"
+    ascii_compatible = True
+
+    def decode(self, body: bytes) -> str:
+        raise AssertionError("the document was decoded")
+
+
+class _Windows874Backend:
+    """Backend reporting an encoding under a name Python does not know."""
+
+    policy_id = "test-windows-874"
+
+    def resolve(self, body, content_type="", encoding=None):
+        return _Windows874Decision()
+
+
+class _Windows874Decision:
+    name = "windows-874"
+    ascii_compatible = True
+
+    def decode(self, body: bytes) -> str:
+        return body.decode("cp874")
+
+
+def test_base_url_beyond_the_first_4096_characters() -> None:
+    body = b"<html><head>" + b" " * 4096 + b'<base href="/base/"></head>'
+    response = HttpResponse("http://www.example.com/index.html", body)
+    assert str(response.urljoin("a")) == "http://www.example.com/base/a"
+
+
+def test_base_url_without_decoding() -> None:
+    response = HttpResponse(
+        "http://www.example.com/index.html",
+        b"<html><head></head></html>",
+        encoding_backend=_NoDecodeBackend(),
+    )
+    assert str(response.urljoin("a")) == "http://www.example.com/a"
+
+
+def test_base_url_encoding_unknown_to_python() -> None:
+    response = HttpResponse(
+        "http://www.example.com/index.html",
+        b'<html><head><base href="/base/"></head>',
+        encoding_backend=_Windows874Backend(),
+    )
+    assert str(response.urljoin("a")) == "http://www.example.com/base/a"
 
 
 def test_explicit_encoding() -> None:
