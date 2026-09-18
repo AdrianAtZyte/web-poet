@@ -65,8 +65,15 @@ class SelectableMixin(abc.ABC, SelectorShortcutsMixin):
         return sel
 
 
+_DEFAULT_BASE_URL_MAX_SCAN = 4096
+
+
 class UrlShortcutsMixin:
     _cached_base_url = None
+
+    @property
+    def _base_url_max_scan(self) -> int | None:
+        return _DEFAULT_BASE_URL_MAX_SCAN
 
     def _url_shortcuts_input(self) -> str:
         return self._selector_input()  # type: ignore[attr-defined]
@@ -74,8 +81,11 @@ class UrlShortcutsMixin:
     @property
     def _base_url(self) -> str:
         if self._cached_base_url is None:
-            text = self._url_shortcuts_input()[:4096]
-            self._cached_base_url = get_base_url(text, str(self.url))  # type: ignore[attr-defined]
+            self._cached_base_url = get_base_url(
+                self._url_shortcuts_input(),
+                str(self.url),  # type: ignore[attr-defined]
+                max_scan=self._base_url_max_scan,
+            )
         return self._cached_base_url
 
     def urljoin(self, url: str | RequestUrl | ResponseUrl) -> RequestUrl:

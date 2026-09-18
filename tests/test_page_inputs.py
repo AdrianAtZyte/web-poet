@@ -345,6 +345,46 @@ def test_http_response_utf16() -> None:
     assert r.encoding == "utf-16"
 
 
+def test_encoding_backend(encoding_backend) -> None:
+    body = "<p>é</p>".encode()
+    headers = {"Content-type": "text/html; charset=utf-8"}
+
+    response = HttpResponse("http://www.example.com", body, headers=headers)
+    assert response.encoding == "utf-8"
+    assert response.text == "<p>é</p>"
+    assert response.css("p::text").get() == "é"
+
+    response = HttpResponse(
+        "http://www.example.com",
+        body,
+        headers=headers,
+        encoding_backend=encoding_backend,
+    )
+    assert response.encoding == "latin-1"
+    assert response.text == "<p>Ã©</p>"
+    assert response.css("p::text").get() == "Ã©"
+
+
+def test_base_url_max_scan() -> None:
+    url = "http://www.example.com/index.html"
+    tag = b'<base href="/base/">'
+    found = "http://www.example.com/base/a"
+    missing = "http://www.example.com/a"
+
+    response = HttpResponse(url, b" " * 4096 + tag)
+    assert str(response.urljoin("a")) == missing
+
+    # A tag that starts within the scanned prefix is read to its end.
+    response = HttpResponse(url, b" " * 4091 + tag)
+    assert str(response.urljoin("a")) == found
+
+    response = HttpResponse(url, b" " * 4096 + tag, base_url_max_scan=8192)
+    assert str(response.urljoin("a")) == found
+
+    response = HttpResponse(url, b" " * 4096 + tag, base_url_max_scan=None)
+    assert str(response.urljoin("a")) == found
+
+
 def test_explicit_encoding() -> None:
     response = HttpResponse("http://www.example.com", "£".encode(), encoding="utf-8")
     assert response.encoding == "utf-8"

@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     import os
     from collections.abc import Iterable
 
+    from w3lib.encoding import EncodingBackend
+
 # represents a leaf dependency of any type serialized as a set of files
 SerializedLeafData: TypeAlias = dict[str, bytes]
 # represents a set of leaf dependencies of different types
@@ -117,6 +119,35 @@ def register_serialization(
 def deserialize_leaf(cls: type[T], data: SerializedLeafData) -> T:
     f_ser: SerializeFunction[T] = serialize_leaf.dispatch(cls)  # type: ignore[attr-defined]
     return cast("T", f_ser.f_deserialize(cls, data))  # type: ignore[attr-defined]
+
+
+_ENCODING_BACKENDS: dict[str, EncodingBackend] = {}
+
+
+def register_encoding_backend(backend: EncodingBackend) -> None:
+    """Allow fixtures recorded with *backend* to be deserialized.
+
+    .. versionadded:: VERSION
+
+    Serialized responses record the policy ID of the
+    :class:`~w3lib.encoding.EncodingBackend` that decoded them, and
+    deserializing one requires the matching backend to be registered, so that
+    text is decoded under the policy it was recorded with.
+    """
+    _ENCODING_BACKENDS[backend.policy_id] = backend
+
+
+def _encoding_backend(policy_id: str | None) -> EncodingBackend | None:
+    if policy_id is None:
+        return None
+    try:
+        return _ENCODING_BACKENDS[policy_id]
+    except KeyError:
+        raise ValueError(
+            f"The serialized data was recorded with encoding policy "
+            f"{policy_id!r}, which is not registered. Register its backend "
+            f"with web_poet.serialization.register_encoding_backend()."
+        ) from None
 
 
 def _get_name_for_class(cls: type) -> str:

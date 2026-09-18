@@ -5,6 +5,8 @@ from urllib.parse import urljoin
 
 import attrs
 from w3lib.encoding import (
+    EncodingBackend,
+    EncodingContext,
     html_body_declared_encoding,
     html_to_unicode,
     http_content_type_encoding,
@@ -14,7 +16,11 @@ from w3lib.encoding import (
 from w3lib.url import canonicalize_url
 
 from web_poet._base import _HttpHeaders
-from web_poet.mixins import SelectableMixin, UrlShortcutsMixin
+from web_poet.mixins import (
+    _DEFAULT_BASE_URL_MAX_SCAN,
+    SelectableMixin,
+    UrlShortcutsMixin,
+)
 from web_poet.utils import memoizemethod_noargs
 
 from .url import RequestUrl as _RequestUrl
@@ -164,9 +170,47 @@ class HttpResponse(SelectableMixin, UrlShortcutsMixin):
         factory=HttpResponseHeaders, converter=HttpResponseHeaders, kw_only=True
     )
     _encoding: str | None = attrs.field(default=None, kw_only=True)
+    encoding_backend: EncodingBackend | None = attrs.field(default=None, kw_only=True)
+    """:class:`~w3lib.encoding.EncodingBackend` that resolves and decodes the
+    encoding of this response.
+
+    .. versionadded:: VERSION
+
+    When set, :attr:`text` and :attr:`encoding` come from
+    :attr:`encoding_context`.
+    """
+    base_url_max_scan: int | None = attrs.field(
+        default=_DEFAULT_BASE_URL_MAX_SCAN, kw_only=True
+    )
+    """Upper bound, in characters, on how much of the document is scanned for
+    a base URL, or ``None`` to scan all of it.
+
+    .. versionadded:: VERSION
+    """
+    _encoding_context: EncodingContext | None = attrs.field(
+        default=None, alias="encoding_context", kw_only=True
+    )
 
     _DEFAULT_ENCODING = "ascii"
     _cached_text: str | None = None
+
+    @property
+    def encoding_context(self) -> EncodingContext | None:
+        """:class:`~w3lib.encoding.EncodingContext` built from
+        :attr:`encoding_backend`, or ``None`` if there is no backend.
+
+        .. versionadded:: VERSION
+        """
+        if self.encoding_backend is None:
+            return None
+        if self._encoding_context is None:
+            self._encoding_context = EncodingContext(
+                self.body,
+                self.headers.get("Content-Type", ""),
+                backend=self.encoding_backend,
+                encoding=self._encoding,
+            )
+        return self._encoding_context
 
     @property
     def text(self) -> str:
@@ -175,6 +219,9 @@ class HttpResponse(SelectableMixin, UrlShortcutsMixin):
         using the detected encoding of the response, according
         to the web browser rules (respecting Content-Type header, etc.)
         """
+        context = self.encoding_context
+        if context is not None:
+            return context.text
         # Access self.encoding before self._cached_text, because
         # there is a chance self._cached_text would be already populated
         # while detecting the encoding
@@ -189,8 +236,15 @@ class HttpResponse(SelectableMixin, UrlShortcutsMixin):
         return self.text
 
     @property
+    def _base_url_max_scan(self) -> int | None:
+        return self.base_url_max_scan
+
+    @property
     def encoding(self) -> str | None:
         """Encoding of the response"""
+        context = self.encoding_context
+        if context is not None:
+            return context.encoding
         return (
             self._encoding
             or self._body_bom_encoding()

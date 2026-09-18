@@ -225,6 +225,40 @@ def test_serialization_httpresponse_encoding(book_list_html) -> None:
     assert deserialized_resp_noenc._encoding is None
 
 
+def test_serialization_httpresponse_encoding_backend(
+    registered_encoding_backend,
+) -> None:
+    response = HttpResponse(
+        url=ResponseUrl("http://books.toscrape.com/index.html"),
+        body=HttpResponseBody(b"<p>\xe9</p>"),
+        encoding_backend=registered_encoding_backend,
+        base_url_max_scan=None,
+    )
+    data = serialize_leaf(response)
+    info = json.loads(data["info.json"])
+    assert info["encoding_policy"] == "test-latin1"
+    assert info["base_url_max_scan"] is None
+
+    deserialized_response = deserialize_leaf(HttpResponse, data)
+    assert deserialized_response.encoding_backend is registered_encoding_backend
+    assert deserialized_response.base_url_max_scan is None
+    assert deserialized_response.text == response.text
+
+
+def test_serialization_httpresponse_unregistered_encoding_policy(
+    registered_encoding_backend,
+) -> None:
+    response = HttpResponse(
+        url=ResponseUrl("http://books.toscrape.com/index.html"),
+        body=HttpResponseBody(b"<p>\xe9</p>"),
+        encoding_backend=registered_encoding_backend,
+    )
+    data = serialize_leaf(response)
+    data["info.json"] = data["info.json"].replace(b"test-latin1", b"unknown")
+    with pytest.raises(ValueError, match=r"encoding policy 'unknown'"):
+        deserialize_leaf(HttpResponse, data)
+
+
 def test_custom_functions() -> None:
     class C:
         value: int
