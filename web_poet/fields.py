@@ -14,7 +14,7 @@ from typing import Any, Generic, TypeVar, cast, overload
 import attrs
 from itemadapter import ItemAdapter
 
-from web_poet._selectors import _SelectorDeclaration
+from web_poet._selectors import _check_unannotated, _SelectorDeclaration
 from web_poet.utils import cached_method, callable_has_parameter, ensure_awaitable
 
 _FIELDS_INFO_ATTRIBUTE_READ = "_web_poet_fields_info"
@@ -103,6 +103,8 @@ class _FieldDescriptor(Generic[_PageT, _ReturnT]):
         return self.original_method.__closure__
 
     def __set_name__(self, owner, name: str) -> None:
+        if self.selector_declaration is not None:
+            _check_unannotated(owner, name)
         self.name = self.__name__ = name
         self.__qualname__ = f"{owner.__qualname__}.{name}"
         if not hasattr(owner, _FIELDS_INFO_ATTRIBUTE_WRITE):

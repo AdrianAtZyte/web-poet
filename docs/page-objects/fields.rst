@@ -52,9 +52,6 @@ instead of writing a method for it:
         brand = field(xpath("//meta[@itemprop='brand']/@content").get())
         images = field(css("img::attr(src)").getall())
 
-Leave declared fields without a type annotation: :mod:`attrs` turns an
-annotated one into a class attribute whose value is the field object itself.
-
 Combining selectors
 -------------------
 

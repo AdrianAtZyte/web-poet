@@ -287,6 +287,25 @@ def test_selector_field_outside_class_body(response) -> None:
         LatePage(response=response).name  # type: ignore[attr-defined]
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    [css("h1::text").get(), field(css("h1::text").get())],
+    ids=["declaration", "field"],
+)
+def test_annotated_declaration(declaration) -> None:
+    # Python < 3.12 wraps errors from __set_name__ in a RuntimeError.
+    with pytest.raises((TypeError, RuntimeError)) as exc_info:
+
+        class AnnotatedPage(WebPage):
+            name: str = declaration
+
+    error: BaseException | None = exc_info.value
+    if isinstance(error, RuntimeError):
+        error = error.__cause__
+    assert isinstance(error, TypeError)
+    assert "AnnotatedPage.name is a selector declaration" in str(error)
+
+
 def test_field_metadata() -> None:
     assert Page.name.__name__ == "name"
     assert Page.name.__qualname__ == "Page.name"

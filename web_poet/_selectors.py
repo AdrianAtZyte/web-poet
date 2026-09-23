@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import sys
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, overload
 
 import parsel
@@ -81,6 +83,9 @@ class _SelectorDeclaration(Generic[_ValueT]):
     def __hash__(self) -> int:
         return hash(self._key)
 
+    def __set_name__(self, owner: type, name: str) -> None:
+        _check_unannotated(owner, name)
+
     @overload
     def __get__(
         self, instance: None, owner: type | None = None
@@ -116,6 +121,24 @@ class _SelectorListDeclaration(
         """Return a declaration of the same expression whose value is the list
         of the values of all its matches."""
         return _SelectorDeclaration(self.expression, self.syntax, "getall")
+
+
+def _check_unannotated(owner: type, name: str) -> None:
+    """Raise :exc:`TypeError` if *name* is annotated in the body of *owner*.
+
+    attrs turns annotated class attributes into instance attributes that
+    default to the declaration object, hiding its value."""
+    if sys.version_info >= (3, 14):
+        from annotationlib import Format, get_annotations  # noqa: PLC0415
+
+        annotations = get_annotations(owner, format=Format.FORWARDREF)
+    else:
+        annotations = inspect.get_annotations(owner)
+    if name in annotations:
+        raise TypeError(
+            f"{owner.__qualname__}.{name} is a selector declaration with a type "
+            f"annotation. Remove the annotation."
+        )
 
 
 def css(expression: str) -> _SelectorListDeclaration[str | None, str]:
