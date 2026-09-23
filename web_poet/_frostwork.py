@@ -25,44 +25,42 @@ _SYNTAXES = {"css", "xpath"}
 
 
 def _build_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
-    """Return a frostwork page for the declarations of *cls* that frostwork can
-    extract, mapped to the name that they have on it, or ``None`` if there are
+    """Return a frostwork page for the declarations of *cls* that frostwork
+    extracts, mapped to the name that they have on it, or ``None`` if there are
     none.
 
     Declarations that are equal are extracted once, under the first attribute
     name that uses one."""
-    if Page is None:
-        return None
-    candidates: dict[_SelectorDeclaration, str] = {}
+    names: dict[_SelectorDeclaration, str] = {}
     for name, declaration in _get_selectors_dict(cls).items():
         if declaration.mode in _METHODS and declaration.syntax in _SYNTAXES:
-            candidates.setdefault(declaration, name)
-    if not candidates:
-        return None
-    report = _new_page(candidates).check()
-    if report.over_budget:
-        # The budget covers a whole schema at once, and leaving out enough
-        # declarations to fit could leave out any of them, so parsel extracts
-        # them all instead.
-        return None
-    supported = frozenset(field.name for field in report.fields if field.supported)
-    names = {
-        declaration: name
-        for declaration, name in candidates.items()
-        if name in supported
-    }
+            names.setdefault(declaration, name)
     if not names:
         return None
-    return _new_page(names), names
-
-
-def _new_page(names: dict[_SelectorDeclaration, str]) -> Page:
     page = Page()
     for declaration, name in names.items():
         getattr(page, _METHODS[declaration.mode])(
             name, declaration.expression, syntax=declaration.syntax
         )
-    return page
+    report = page.check()
+    if not report.ok:
+        problems = [
+            f"{field.name} = {field.selector!r}: {field.reason}"
+            for field in report.unsupported
+        ]
+        if report.over_budget:
+            problems.append(
+                f"over budget: {report.members}/{report.max_members} member "
+                f"selectors, {report.sib_bits}/{report.max_sib_bits} "
+                f"sibling-combinator bits"
+            )
+        raise TypeError(
+            f"frostwork cannot extract the selector declarations of "
+            f"{cls.__qualname__}:\n  - "
+            + "\n  - ".join(problems)
+            + "\nWrite some fields as methods to extract them with parsel."
+        )
+    return page, names
 
 
 def _get_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
@@ -70,17 +68,33 @@ def _get_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
     return _class_cached(cls, _PAGE_ATTRIBUTE, _build_page)
 
 
+def _check_class(cls: type) -> None:
+    """Raise an exception if frostwork cannot extract the selector declarations
+    of *cls*."""
+    if Page is None:
+        raise ImportError(
+            f"{cls.__qualname__} sets declarative_backend='frostwork'. Install "
+            f"web-poet[frostwork]."
+        )
+    if not hasattr(cls, "_selector_document"):
+        raise TypeError(
+            f"{cls.__qualname__} sets declarative_backend='frostwork', but it "
+            f"has no response for frostwork to extract from. Inherit from a "
+            f"class that does, e.g. web_poet.WebPage."
+        )
+    _get_page(cls)
+
+
 def _extract(
     cls: type,
     declaration: _SelectorDeclaration,
     document: tuple[bytes | str, str | None],
 ) -> dict[_SelectorDeclaration, Any] | None:
-    """Return the value of every declaration of *cls* that frostwork can
-    extract out of *document*, provided that *declaration* is among them.
+    """Return the value of every declaration of *cls* that frostwork extracts
+    out of *document*, provided that *declaration* is among them.
 
-    Return an empty mapping otherwise, including when frostwork is not
-    installed, or ``None`` if frostwork cannot extract any declaration out of
-    *document*."""
+    Return an empty mapping otherwise, or ``None`` if frostwork cannot extract
+    any declaration out of *document*."""
     result = _get_page(cls)
     if result is None:
         return {}

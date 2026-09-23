@@ -420,7 +420,7 @@ def test_browser_page() -> None:
     assert asyncio.run(Page(response=response).to_item()) == {"name": "Foo"}
 
 
-def test_extraction_is_lazy(response, parsel_only) -> None:
+def test_extraction_is_lazy(response) -> None:
     """Parsel extracts the read declaration alone, and caches its value."""
     declarations = _get_selectors_dict(Page)
     page = Page(response=response)

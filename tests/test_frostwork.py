@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 import attrs
-import parsel
 import pytest
 
 from web_poet import (
@@ -45,7 +44,7 @@ def response():
 
 
 @attrs.define
-class Page(WebPage):
+class Page(WebPage, declarative_backend="frostwork"):
     name = field(css("h1::text").get())
     images = field(css("img::attr(src)").getall())
     brand = field(xpath("//meta[@itemprop='brand']/@content").get())
@@ -85,40 +84,87 @@ def test_extractable_declarations() -> None:
     }
 
 
-def test_unsupported_declarations(response) -> None:
-    """A page with no declaration that frostwork supports is left to parsel."""
+def test_unsupported_declaration() -> None:
+    with pytest.raises(TypeError, match=r"name = ':root h1::text'"):
+
+        class UnsupportedPage(WebPage, declarative_backend="frostwork"):
+            name = field(css(":root h1::text").get())
+            brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+
+
+def test_over_budget() -> None:
+    with pytest.raises(TypeError, match="over budget"):
+
+        class OverBudgetPage(WebPage, declarative_backend="frostwork"):
+            # Every comma-separated selector counts towards the budget, which
+            # is 128 selectors at the time of writing.
+            name = field(css(", ".join(["h1::text"] * 129)).get())
+
+
+def test_invalid_backend() -> None:
+    with pytest.raises(ValueError, match="'lxml'"):
+
+        class InvalidPage(WebPage, declarative_backend="lxml"):  # type: ignore[arg-type]
+            pass
+
+
+def test_default_backend(response) -> None:
+    """Without declarative_backend, parsel extracts every declaration."""
 
     @attrs.define
-    class UnsupportedPage(WebPage):
-        name = field(css(":root h1::text").get())
+    class ParselPage(WebPage):
+        name = field(css("h1::text").get())
+        brand = field(xpath("//meta[@itemprop='brand']/@content").get())
 
-    assert _get_page(UnsupportedPage) is None
-    assert asyncio.run(UnsupportedPage(response=response).to_item()) == {
-        "name": " Foo "
+    page = ParselPage(response=response)
+    assert page.name == " Foo "
+    assert set(page._selector_value_cache()) == {
+        _get_selectors_dict(ParselPage)["name"]
     }
 
 
-def test_over_budget(response) -> None:
-    """A page whose declarations do not fit the frostwork budget is left to
+def test_inheritance(response) -> None:
+    """Subclasses inherit declarative_backend, and can set it back to
     parsel."""
 
-    @attrs.define
-    class OverBudgetPage(WebPage):
-        # Every comma-separated selector counts towards the budget, which is
-        # 128 selectors at the time of writing.
-        name = field(css(", ".join(["h1::text"] * 129)).get())
+    class SubPage(Page):
+        pass
 
-    assert _get_page(OverBudgetPage) is None
-    assert asyncio.run(OverBudgetPage(response=response).to_item()) == {"name": " Foo "}
+    class ParselPage(Page, declarative_backend="parsel"):
+        pass
+
+    sub_page = SubPage(response=response)
+    assert sub_page.name == " Foo "
+    assert len(sub_page._selector_value_cache()) == 6
+    parsel_page = ParselPage(response=response)
+    assert parsel_page.name == " Foo "
+    assert len(parsel_page._selector_value_cache()) == 1
+
+
+def test_no_extractable_declarations(response) -> None:
+    @attrs.define
+    class JmesPathPage(WebPage, declarative_backend="frostwork"):
+        _ld = css('script[type="application/ld+json"]::text')
+
+        @field
+        def sku(self) -> str | None:
+            return self._ld.jmespath("sku").get()
+
+    assert _get_page(JmesPathPage) is None
+    assert JmesPathPage(response=response).sku == "SKU-1"
 
 
 def test_values(response) -> None:
     assert asyncio.run(Page(response=response).to_item()) == EXPECTED
 
 
-def test_parsel_agreement(response, parsel_only) -> None:
+def test_parsel_agreement(response) -> None:
     """Every declaration has the same value with either backend."""
-    assert asyncio.run(Page(response=response).to_item()) == EXPECTED
+
+    class ParselPage(Page, declarative_backend="parsel"):
+        pass
+
+    assert asyncio.run(ParselPage(response=response).to_item()) == EXPECTED
 
 
 def test_extraction_is_eager(response) -> None:
@@ -144,7 +190,7 @@ def test_reused_declaration(response) -> None:
     """A declaration used by more than one attribute is extracted once."""
 
     @attrs.define
-    class ReusePage(WebPage):
+    class ReusePage(WebPage, declarative_backend="frostwork"):
         _raw_price = css(".price::text").get()
         price = field(_raw_price, out=[float])
 
@@ -159,7 +205,7 @@ def test_unknown_encoding() -> None:
     parsel, which decodes it as declared."""
 
     @attrs.define
-    class EncodedPage(WebPage):
+    class EncodedPage(WebPage, declarative_backend="frostwork"):
         name = field(css("h1::text").get())
         brand = field(xpath("//meta[@itemprop='brand']/@content").get())
 
@@ -178,7 +224,7 @@ def test_python_codec_name() -> None:
     extracted by frostwork."""
 
     @attrs.define
-    class EncodedPage(WebPage):
+    class EncodedPage(WebPage, declarative_backend="frostwork"):
         name = field(css("h1::text").get())
         brand = field(xpath("//meta[@itemprop='brand']/@content").get())
 
@@ -197,7 +243,7 @@ def test_browser_page() -> None:
     scanned as it is."""
 
     @attrs.define
-    class BrowserPageSubclass(BrowserPage):
+    class BrowserPageSubclass(BrowserPage, declarative_backend="frostwork"):
         name = field(css("h1::text").get())
 
     response = BrowserResponse(url="http://example.com", html=HTML)
@@ -207,15 +253,11 @@ def test_browser_page() -> None:
 
 
 def test_selector_extractor() -> None:
-    """An extractor built on a selector provides no document to scan, so parsel
-    extracts its declarations."""
+    """An extractor built on a selector provides no document to scan."""
+    with pytest.raises(TypeError, match="no response"):
 
-    @attrs.define
-    class Extractor(SelectorExtractor):
-        name = field(css("h1::text").get())
-
-    extractor = Extractor(parsel.Selector(HTML))
-    assert asyncio.run(extractor.to_item()) == {"name": " Foo "}
+        class Extractor(SelectorExtractor, declarative_backend="frostwork"):
+            name = field(css("h1::text").get())
 
 
 def test_rejection_is_cached(monkeypatch) -> None:
@@ -231,7 +273,7 @@ def test_rejection_is_cached(monkeypatch) -> None:
     monkeypatch.setattr(_frostwork, "resolve_label", counting_resolve_label)
 
     @attrs.define
-    class EncodedPage(WebPage):
+    class EncodedPage(WebPage, declarative_backend="frostwork"):
         name = field(css("h1::text").get())
         brand = field(xpath("//meta[@itemprop='brand']/@content").get())
 

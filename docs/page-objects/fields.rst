@@ -95,21 +95,37 @@ read JSON embedded in a web page:
 Extracting with frostwork
 -------------------------
 
-Install the ``frostwork`` extra for faster extraction of CSS and XPath
-declarations that use ``get()`` or ``getall()`` and are within the `frostwork
-selector contract`_:
+For faster extraction of CSS and XPath declarations that use ``get()`` or
+``getall()``, install the ``frostwork`` extra:
 
 .. code-block:: shell
 
     pip install web-poet[frostwork]
 
-.. _frostwork selector contract: https://github.com/scrapy/frostwork/blob/main/docs/COMPATIBILITY.md
+And set ``declarative_backend="frostwork"`` on your page object class:
+
+.. code-block:: python
+
+    import attrs
+    from web_poet import WebPage, css, field
+
+
+    @attrs.define
+    class MyPage(WebPage, declarative_backend="frostwork"):
+        name = field(css("h1::text").get())
+
+Subclasses can set it back to ``"parsel"``, the default.
 
 Extraction is several times faster for a page object whose every field is
 declared, and more so the larger the document.
 
-frostwork output can differ slightly from parsel’s. To extract a field with
-parsel, write it as a method, e.g. ``self.css(".price::text").get()``.
+Those declarations must be within the `frostwork selector contract`_, and fit
+its budget together, or defining the class raises :exc:`TypeError`. To extract
+a field with parsel instead, write it as a method, e.g.
+``self.css(".price::text").get()``. frostwork output can differ slightly from
+parsel’s.
+
+.. _frostwork selector contract: https://github.com/scrapy/frostwork/blob/main/docs/COMPATIBILITY.md
 
 .. _fields-sync-async:
 

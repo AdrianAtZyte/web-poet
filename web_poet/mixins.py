@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, Protocol, TypeVar
 from urllib.parse import urljoin
 
 import parsel
 from w3lib.html import get_base_url
 
+from web_poet._frostwork import _check_class as _frostwork_check_class
 from web_poet._frostwork import _extract as _frostwork_extract
 from web_poet._selectors import _JMESPATH_ERROR, _jmespath_supported
 from web_poet.utils import cached_method
@@ -26,8 +27,29 @@ class _ResponseLike(Protocol):
 ResponseT = TypeVar("ResponseT", bound=_ResponseLike)
 
 
+_DeclarativeBackend = Literal["parsel", "frostwork"]
+
+
 class SelectorShortcutsMixin:
+    _declarative_backend: _DeclarativeBackend = "parsel"
     _frostwork_declined = False
+
+    def __init_subclass__(
+        cls, declarative_backend: _DeclarativeBackend | None = None, **kwargs: Any
+    ) -> None:
+        super().__init_subclass__(**kwargs)
+        # attrs recreates the class without this keyword, and the recreated
+        # class keeps the value set on the original one (see issue #141).
+        if declarative_backend is not None:
+            if declarative_backend not in ("parsel", "frostwork"):
+                raise ValueError(
+                    f"{cls.__qualname__} sets declarative_backend to "
+                    f"{declarative_backend!r}, but it must be 'parsel' or "
+                    f"'frostwork'."
+                )
+            cls._declarative_backend = declarative_backend
+        if cls._declarative_backend == "frostwork":
+            _frostwork_check_class(cls)
 
     def xpath(self, query, **kwargs) -> parsel.SelectorList:
         """A shortcut to ``.selector.xpath()``."""
@@ -43,12 +65,6 @@ class SelectorShortcutsMixin:
             raise AttributeError(_JMESPATH_ERROR)
         return self.selector.jmespath(query, **kwargs)  # type: ignore[attr-defined]
 
-    def _selector_document(self) -> tuple[bytes | str, str | None] | None:
-        """Return the raw document of this object and its encoding, for
-        extraction backends that scan it directly instead of using
-        ``self.selector``, or ``None`` if there is no such document."""
-        return None
-
     @cached_method
     def _selector_value_cache(self) -> dict[_SelectorDeclaration, Any]:
         return {}
@@ -62,8 +78,11 @@ class SelectorShortcutsMixin:
         cached and reused, so that a single pass happens only once."""
         values = self._selector_value_cache()
         if declaration not in values:
-            document = self._selector_document()
-            if document is not None and not self._frostwork_declined:
+            if (
+                self._declarative_backend == "frostwork"
+                and not self._frostwork_declined
+            ):
+                document = self._selector_document()  # type: ignore[attr-defined]
                 extracted = _frostwork_extract(type(self), declaration, document)
                 if extracted is None:
                     self._frostwork_declined = True
@@ -157,6 +176,8 @@ class ResponseShortcutsMixin(Generic[ResponseT], SelectableMixin, UrlShortcutsMi
         return self.html
 
     def _selector_document(self) -> tuple[bytes | str, str | None]:
+        """Return the raw document of this object and its encoding, for
+        frostwork to scan directly instead of using ``self.selector``."""
         response: Any = self.response
         body = getattr(response, "body", None)
         if body is None:

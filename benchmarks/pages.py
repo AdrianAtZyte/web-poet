@@ -88,7 +88,7 @@ class ProductPage(WebPage[Product]):
         return self.css("#wayfinding-breadcrumbs_feature_div a::text").getall()
 
 
-class DeclarativeProductPage(ProductPage):
+class DeclarativeProductPage(ProductPage, declarative_backend="frostwork"):
     """ProductPage with every selector declared instead of queried in a
     method."""
 
@@ -205,7 +205,7 @@ class ArticlePage(WebPage[Article]):
         return self.css("article figure img::attr(src)").getall()
 
 
-class DeclarativeArticlePage(ArticlePage):
+class DeclarativeArticlePage(ArticlePage, declarative_backend="frostwork"):
     """ArticlePage with every selector declared instead of queried in a
     method."""
 
@@ -383,7 +383,7 @@ class MinimalPage(WebPage[Minimal]):
         return self.xpath("//a/@href").get()
 
 
-class DeclarativeJobPostingPage(JobPostingPage):
+class DeclarativeJobPostingPage(JobPostingPage, declarative_backend="frostwork"):
     """JobPostingPage with every selector declared instead of queried in a
     method."""
 
@@ -406,7 +406,7 @@ class DeclarativeJobPostingPage(JobPostingPage):
     )
 
 
-class DeclarativeMinimalPage(MinimalPage):
+class DeclarativeMinimalPage(MinimalPage, declarative_backend="frostwork"):
     """MinimalPage with every selector declared instead of queried in a
     method."""
 

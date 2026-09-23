@@ -4,20 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from web_poet import mixins
 from web_poet.page_inputs import HttpResponse, HttpResponseBody
 from web_poet.rules import RulesRegistry
 
 pytest_plugins = ["pytester"]
-
-
-@pytest.fixture
-def parsel_only(monkeypatch):
-    """Disable frostwork, so that parsel extracts every selector
-    declaration."""
-    monkeypatch.setattr(
-        mixins, "_frostwork_extract", lambda cls, declaration, document: {}
-    )
 
 
 @pytest.fixture(name="pytester")
