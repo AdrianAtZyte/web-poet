@@ -111,14 +111,8 @@ selector contract`_:
 Extraction is several times faster for a page object whose every field is
 declared, and more so the larger the document.
 
-.. warning:: Where its contract documents a divergence, frostwork changes the
-    value of a declaration, and not only how long it takes to extract it. Most
-    notably, a declaration with no ``::text`` or ``::attr()`` gets the HTML of
-    its matches as the response writes it, where parsel gets it as lxml
-    rewrites it.
-
-    Write a field as a method, e.g. ``self.css(".price::text").get()``, for
-    parsel to extract it.
+frostwork output can differ slightly from parsel’s. To extract a field with
+parsel, write it as a method, e.g. ``self.css(".price::text").get()``.
 
 .. _fields-sync-async:
 
