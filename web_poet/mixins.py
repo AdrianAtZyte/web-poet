@@ -27,6 +27,8 @@ ResponseT = TypeVar("ResponseT", bound=_ResponseLike)
 
 
 class SelectorShortcutsMixin:
+    _frostwork_declined = False
+
     def xpath(self, query, **kwargs) -> parsel.SelectorList:
         """A shortcut to ``.selector.xpath()``."""
         return self.selector.xpath(query, **kwargs)  # type: ignore[attr-defined]
@@ -61,8 +63,12 @@ class SelectorShortcutsMixin:
         values = self._selector_value_cache()
         if declaration not in values:
             document = self._selector_document()
-            if document is not None:
-                values.update(_frostwork_extract(type(self), declaration, document))
+            if document is not None and not self._frostwork_declined:
+                extracted = _frostwork_extract(type(self), declaration, document)
+                if extracted is None:
+                    self._frostwork_declined = True
+                else:
+                    values.update(extracted)
             if declaration not in values:
                 values[declaration] = self._parsel_value(declaration)
         return values[declaration]

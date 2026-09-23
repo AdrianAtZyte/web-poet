@@ -46,7 +46,7 @@ framework = [
     "playwright >= 1.20.0",
 ]
 frostwork = [
-    "frostwork >= 0.1.0",
+    "frostwork >= 0.1.6",
 ]
 
 [project.entry-points."pytest11"]

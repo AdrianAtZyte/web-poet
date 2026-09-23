@@ -12,6 +12,7 @@ from web_poet import (
     HttpResponse,
     SelectorExtractor,
     WebPage,
+    _frostwork,
     css,
     field,
     jmespath,
@@ -20,7 +21,7 @@ from web_poet import (
 from web_poet._frostwork import _get_page
 from web_poet._selectors import _get_selectors_dict
 
-pytest.importorskip("frostwork")
+frostwork = pytest.importorskip("frostwork")
 
 HTML = """
 <html>
@@ -172,6 +173,25 @@ def test_unknown_encoding() -> None:
     }
 
 
+def test_python_codec_name() -> None:
+    """A document in an encoding that Python and frostwork name differently is
+    extracted by frostwork."""
+
+    @attrs.define
+    class EncodedPage(WebPage):
+        name = field(css("h1::text").get())
+        brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+
+    body = "<html><body><h1>\u0e01</h1></body></html>".encode("cp874")
+    page = EncodedPage(
+        response=HttpResponse("http://example.com", body, encoding="cp874")
+    )
+    assert page.name == "\u0e01"
+    assert set(page._selector_value_cache()) == set(
+        _get_selectors_dict(EncodedPage).values()
+    )
+
+
 def test_browser_page() -> None:
     """A browser response provides no bytes to scan, but its HTML can be
     scanned as it is."""
@@ -196,3 +216,29 @@ def test_selector_extractor() -> None:
 
     extractor = Extractor(parsel.Selector(HTML))
     assert asyncio.run(extractor.to_item()) == {"name": " Foo "}
+
+
+def test_rejection_is_cached(monkeypatch) -> None:
+    """A document that frostwork cannot extract is checked once per page
+    object."""
+    calls = []
+    resolve_label = frostwork.resolve_label
+
+    def counting_resolve_label(*args):
+        calls.append(args)
+        return resolve_label(*args)
+
+    monkeypatch.setattr(_frostwork, "resolve_label", counting_resolve_label)
+
+    @attrs.define
+    class EncodedPage(WebPage):
+        name = field(css("h1::text").get())
+        brand = field(xpath("//meta[@itemprop='brand']/@content").get())
+
+    body = "<html><body><h1>Café</h1></body></html>".encode("cp437")
+    page = EncodedPage(
+        response=HttpResponse("http://example.com", body, encoding="cp437")
+    )
+    assert page.name == "Café"
+    assert page.brand is None
+    assert len(calls) == 1

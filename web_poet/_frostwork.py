@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import codecs
 from typing import TYPE_CHECKING, Any
 
 try:
-    from frostwork import Page, check, detect_encoding
+    from frostwork import Page, detect_encoding, resolve_label
 except ImportError:
     Page = None  # type: ignore[assignment,misc]
 
@@ -40,9 +39,7 @@ def _build_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | Non
             candidates.setdefault(declaration, name)
     if not candidates:
         return None
-    report = check(
-        [(name, declaration.expression) for declaration, name in candidates.items()]
-    )
+    report = _new_page(candidates).check()
     if report.over_budget:
         # The budget covers a whole schema at once, and leaving out enough
         # declarations to fit could leave out any of them, so parsel extracts
@@ -56,10 +53,16 @@ def _build_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | Non
     }
     if not names:
         return None
+    return _new_page(names), names
+
+
+def _new_page(names: dict[_SelectorDeclaration, str]) -> Page:
     page = Page()
     for declaration, name in names.items():
-        getattr(page, _METHODS[declaration.mode])(name, declaration.expression)
-    return page, names
+        getattr(page, _METHODS[declaration.mode])(
+            name, declaration.expression, syntax=declaration.syntax
+        )
+    return page
 
 
 def _get_page(cls: type) -> tuple[Page, dict[_SelectorDeclaration, str]] | None:
@@ -71,12 +74,13 @@ def _extract(
     cls: type,
     declaration: _SelectorDeclaration,
     document: tuple[bytes | str, str | None],
-) -> dict[_SelectorDeclaration, Any]:
+) -> dict[_SelectorDeclaration, Any] | None:
     """Return the value of every declaration of *cls* that frostwork can
     extract out of *document*, provided that *declaration* is among them.
 
     Return an empty mapping otherwise, including when frostwork is not
-    installed."""
+    installed, or ``None`` if frostwork cannot extract any declaration out of
+    *document*."""
     result = _get_page(cls)
     if result is None:
         return {}
@@ -88,14 +92,8 @@ def _extract(
         # frostwork sniffs an encoding out of the document when it does not
         # know the one given to it, and the values of a document that it
         # decodes differently from the parsed one belong to parsel.
-        try:
-            same_encoding = (
-                codecs.lookup(detect_encoding(html, encoding)).name
-                == codecs.lookup(encoding).name
-            )
-        except LookupError:
-            same_encoding = False
-        if not same_encoding:
-            return {}
+        label = resolve_label(encoding)
+        if label is None or label != detect_encoding(html, encoding):
+            return None
     values = page.extract(html, encoding).to_dict()
     return {declaration: values[name] for declaration, name in names.items()}
